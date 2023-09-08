@@ -168,3 +168,5 @@ output_models/
 .ipynb_checkpoints/
 Untitled*.ipynb
 SWEETVIZ*.html
+archives/
+test*.*

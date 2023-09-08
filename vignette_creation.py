@@ -95,7 +95,7 @@ def my_func(path_to_orthophoto_rgb):
                         pos = dept+'_'+str(int((int(rgb_x)+mnhc_x)*1000+x/2))+'_'+str(int((int(rgb_y)-mnhc_y)*1000+y/2))
                         
                         cv2.imwrite(config['rgb_vignettes_path'] + f'rgb_{rgb_x}_{rgb_y}/' + 'rgb_' + str(pos) + '.jpg', crop_rgb)
-                        cv2.imwrite(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/' + 'mask_'+ str(pos) + '.png', crop_mask)
+                        cv2.imwrite(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/' + 'mask_'+ str(pos) + '.png', crop_mask*255)
 
                         # Calculate characteristics of the RGB crop and add to vignette_data
                         mask_2 = np.stack((crop_mask,)*3, axis=-1)
