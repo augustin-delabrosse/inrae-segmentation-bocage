@@ -160,10 +160,11 @@ cython_debug/
 #.idea/
 
 
-données/
+donnees/
 fichiers_paul/
 .virtual_documents/
 vignettes/
 output_models/
 .ipynb_checkpoints/
 Untitled*.ipynb
+SWEETVIZ*.html
