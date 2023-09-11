@@ -10,6 +10,9 @@ from tqdm import tqdm
 from time import time
 import json 
 
+import warnings
+warnings.simplefilter("ignore")
+
 with open('config.json') as f_in:
     config = json.load(f_in)
 
@@ -66,8 +69,15 @@ def my_func(path_to_orthophoto_rgb):
     if not os.path.exists(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/'):
         os.makedirs(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/')
 
+    if os.path.exists(config['stat_vignettes_path']):
+        df = pd.read_csv(config['stat_vignettes_path'], index_col="Unnamed: 0")
+    else:
+        df = pd.DataFrame(columns=config['stat_vignettes_col'])
+
+    # display(df)
+    
     # i = 0
-    vignette_data = []
+    # vignette_data = []
     for mnhc_x in tqdm(range(0,5)):
         for mnhc_y in range(0,5):
             mnhc_file = mnhc_dir_dept+'Diff_MNS_CORREL_1-0_LAMB93_20FD'+dept+'25_'+str(int(int(rgb_x)+mnhc_x))+'_'+str(int(int(rgb_y)-mnhc_y))+'.tif'
@@ -84,11 +94,11 @@ def my_func(path_to_orthophoto_rgb):
                 .astype('uint8')
 
                 
-                for x in range(0, w-config['img_size']+1, config['img_size']):
-                    for y in range(0, h-config['img_size']+1, config['img_size']):
-                        # print(x, y)
-                        crop_rgb = ortho_rgb[mnhc_y*h+y: mnhc_y*h+y+config['img_size'], mnhc_x*w+x: mnhc_x*w+x+config['img_size'], :]
-                        crop_mask = mask[y:y+config['img_size'], x:x+config['img_size']]
+                for x in range(0, w-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
+                    for y in range(0, h-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
+                        
+                        crop_rgb = ortho_rgb[mnhc_y*h+y: mnhc_y*h+y+config['img_size']+config['border']*2, mnhc_x*w+x: mnhc_x*w+x+config['img_size']+config['border']*2, :]
+                        crop_mask = mask[y:y+config['img_size']+config['border']*2, x:x+config['img_size']+config['border']*2]
 
                         # filtre rgb
                         # enregistrement
@@ -105,11 +115,17 @@ def my_func(path_to_orthophoto_rgb):
                         np.mean(crop_rgb, axis=(0, 1), where=non_mask.astype(bool)).tolist() + \
                         np.std(crop_rgb, axis=(0, 1), where=mask_2.astype(bool)).tolist() + \
                         np.std(crop_rgb, axis=(0, 1), where=non_mask.astype(bool)).tolist()
-                        vignette_data.append(res)
+                        # vignette_data.append(res)
+                        
+                        #append list to DataFrame
+                        df.loc[len(df) + len(set(range(df.index[-1]))-set(df.index))
+                        if len(df.index) > 0
+                        else 0] = res
                 
                 # Si besoin de plus d'images, commenter le break
                 break
     
+    df.drop_duplicates(subset='file').to_csv(config['stat_vignettes_path'])
     # Convert the vignette data to a Pandas DataFrame and return
-    return pd.DataFrame(vignette_data, columns=('file', 'wood_size', 'w_mean_R', 'w_mean_G', 'w_mean_B', 'nw_mean_R', 'nw_mean_G', 'nw_mean_B', 'w_std_R', 'w_std_G', 'w_std_B', 'nw_std_R', 'nw_std_G', 'nw_std_B'))
+    return df
                 
