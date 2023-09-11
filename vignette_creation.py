@@ -48,17 +48,14 @@ def my_func(path_to_orthophoto_rgb):
     rgb_name = os.path.basename(path_to_orthophoto_rgb)
     dept = rgb_name[:2]
     year = rgb_name[3:7]
-    path_to_orthophoto_irc = config["irc_path"][dept][year] + rgb_name[:config['irc_pos']] + '-IRC' + rgb_name[config['irc_pos']:]# config["irc_path"] + path_to_orthophoto_rgb[config['rgb_name_pos']:] # A Changer plus tard
-    # mnhc_tiff = config['mnhc_path'] + "Diff_MNS_CORREL_1-0_LAMB93_20FD3525_" + str(path_to_orthophoto_rgb[config['rgb_coordinates_pos']:config['rgb_coordinates_pos']+8]).replace('-', '_') + ".tif"
+    path_to_orthophoto_irc = config["irc_path"][dept][year] + rgb_name[:config['irc_pos']] + '-IRC' + rgb_name[config['irc_pos']:]
     
     # position
     rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos']: config['rgb_coordinates_pos']+3]
     rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos']+4: config['rgb_coordinates_pos']+8]
     mnhc_dir_dept = config['mnhc_path']+dept+'_'+year+'/'
     
-    # images IRC et RGB
-    # ortho_irc_file = config["irc_path"] + '/' + dept + '-2020-0'+rgb_x+'-'+rgb_y+'-LA93-0M20-IRC-E080.jp2'
-    # ouverture
+    # opening + resize of the IRC and RGB images
     ortho_rgb = cv2.resize(np.asarray(Image.open(path_to_orthophoto_rgb)), (10000, 10000), interpolation=cv2.INTER_AREA)
     ortho_irc = cv2.resize(np.asarray(Image.open(path_to_orthophoto_irc)), (10000, 10000), interpolation=cv2.INTER_AREA) 
     ndvi = np.divide(ortho_irc[:,:,0]-ortho_irc[:,:,1],ortho_irc[:,:,0]+ortho_irc[:,:,1], where=(ortho_irc[:,:,0]+ortho_irc[:,:,1])!=0 )
@@ -74,10 +71,6 @@ def my_func(path_to_orthophoto_rgb):
     else:
         df = pd.DataFrame(columns=config['stat_vignettes_col'])
 
-    # display(df)
-    
-    # i = 0
-    # vignette_data = []
     for mnhc_x in tqdm(range(0,5)):
         for mnhc_y in range(0,5):
             mnhc_file = mnhc_dir_dept+'Diff_MNS_CORREL_1-0_LAMB93_20FD'+dept+'25_'+str(int(int(rgb_x)+mnhc_x))+'_'+str(int(int(rgb_y)-mnhc_y))+'.tif'
@@ -100,8 +93,6 @@ def my_func(path_to_orthophoto_rgb):
                         crop_rgb = ortho_rgb[mnhc_y*h+y: mnhc_y*h+y+config['img_size']+config['border']*2, mnhc_x*w+x: mnhc_x*w+x+config['img_size']+config['border']*2, :]
                         crop_mask = mask[y:y+config['img_size']+config['border']*2, x:x+config['img_size']+config['border']*2]
 
-                        # filtre rgb
-                        # enregistrement
                         pos = dept+'_'+str(int((int(rgb_x)+mnhc_x)*1000+x/2))+'_'+str(int((int(rgb_y)-mnhc_y)*1000+y/2))
                         
                         cv2.imwrite(config['rgb_vignettes_path'] + f'rgb_{rgb_x}_{rgb_y}/' + 'rgb_' + str(pos) + '.jpg', crop_rgb)
@@ -126,6 +117,6 @@ def my_func(path_to_orthophoto_rgb):
                 break
     
     df.drop_duplicates(subset='file').to_csv(config['stat_vignettes_path'])
-    # Convert the vignette data to a Pandas DataFrame and return
+    
     return df
                 
