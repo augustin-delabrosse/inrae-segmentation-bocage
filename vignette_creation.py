@@ -42,7 +42,15 @@ def std_convoluted(im, N):
     return np.sqrt((s2 - s**2 / ns) / ns)
 
 def my_func(path_to_orthophoto_rgb):
-    
+    """
+    Create and save vignettes and masks from the RGB and IRC orthophotos.
+
+    Parameters:
+    - path_to_orthophoto_rgb (str): Path to the orthophoto RGB image.
+
+    Returns:
+    - pd.DataFrame: DataFrame containing stats about the vignettes.
+    """
     Image.MAX_IMAGE_PIXELS = None
     
     rgb_name = os.path.basename(path_to_orthophoto_rgb)
@@ -50,22 +58,24 @@ def my_func(path_to_orthophoto_rgb):
     year = rgb_name[3:7]
     path_to_orthophoto_irc = config["irc_path"][dept][year] + rgb_name[:config['irc_pos']] + '-IRC' + rgb_name[config['irc_pos']:]
     
-    # position
+    # Extract coordinates from RGB orthophoto path
     rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos']: config['rgb_coordinates_pos']+3]
     rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos']+4: config['rgb_coordinates_pos']+8]
     mnhc_dir_dept = config['mnhc_path']+dept+'_'+year+'/'
     
-    # opening + resize of the IRC and RGB images
+    # Open and resize IRC and RGB images
     ortho_rgb = cv2.resize(np.asarray(Image.open(path_to_orthophoto_rgb)), (10000, 10000), interpolation=cv2.INTER_AREA)
     ortho_irc = cv2.resize(np.asarray(Image.open(path_to_orthophoto_irc)), (10000, 10000), interpolation=cv2.INTER_AREA) 
     ndvi = np.divide(ortho_irc[:,:,0]-ortho_irc[:,:,1],ortho_irc[:,:,0]+ortho_irc[:,:,1], where=(ortho_irc[:,:,0]+ortho_irc[:,:,1])!=0 )
     ortho_irc = None 
     
+    # Create output directories if they don't exist
     if not os.path.exists(config['rgb_vignettes_path'] + f'rgb_{rgb_x}_{rgb_y}/'):
         os.makedirs(config['rgb_vignettes_path'] + f'rgb_{rgb_x}_{rgb_y}/')
     if not os.path.exists(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/'):
         os.makedirs(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/')
 
+    # Read existing DataFrame or create a new one
     if os.path.exists(config['stat_vignettes_path']):
         df = pd.read_csv(config['stat_vignettes_path'], index_col="Unnamed: 0")
     else:
@@ -98,7 +108,7 @@ def my_func(path_to_orthophoto_rgb):
                         cv2.imwrite(config['rgb_vignettes_path'] + f'rgb_{rgb_x}_{rgb_y}/' + 'rgb_' + str(pos) + '.jpg', crop_rgb)
                         cv2.imwrite(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/' + 'mask_'+ str(pos) + '.png', crop_mask*255)
 
-                        # Calculate characteristics of the RGB crop and add to vignette_data
+                        # Calculate characteristics of the RGB crop and add to the DataFrame
                         mask_2 = np.stack((crop_mask,)*3, axis=-1)
                         non_mask = np.logical_not(mask_2)
                         res = [pos, crop_mask.sum()] + \
@@ -108,14 +118,15 @@ def my_func(path_to_orthophoto_rgb):
                         np.std(crop_rgb, axis=(0, 1), where=non_mask.astype(bool)).tolist()
                         # vignette_data.append(res)
                         
-                        #append list to DataFrame
+                        # Append the list to the DataFrame
                         df.loc[len(df) + len(set(range(df.index[-1]))-set(df.index))
                         if len(df.index) > 0
                         else 0] = res
                 
-                # Si besoin de plus d'images, commenter le break
+                # If more images are needed, comment the break
                 break
-    
+                
+    # Drop duplicates and save the DataFrame to a CSV file
     df.drop_duplicates(subset='file').to_csv(config['stat_vignettes_path'])
     
     return df
