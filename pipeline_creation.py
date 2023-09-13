@@ -3,6 +3,7 @@ import tensorflow as tf
 from glob import glob
 import itertools
 import numpy as np
+import random
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
@@ -59,7 +60,7 @@ def preprocess_image(image_path, mask_path):
     # Ensure mask_output is of type float32
     mask_output = tf.cast(mask_decoded, tf.float32)
 
-    return (image_output, mask_output)
+    return (image_output, mask_output/255.)
 
 # Function to apply histogram equalization to an image
 def equalize_histogram(image):
@@ -96,7 +97,7 @@ def gaussian_blur(image, kernel_size=(3, 3)):
     image = cv2.GaussianBlur(image, kernel_size, 0)
     return image
 
-def data_augmentation(image, mask):
+def data_augmentation(image, mask, grayscale=False):
     """
     Apply data augmentation techniques to an image and its mask.
 
@@ -118,7 +119,7 @@ def data_augmentation(image, mask):
         mask = tf.image.flip_up_down(mask)
 
     # Apply color transformation (RGB to grayscale)
-    if tf.random.uniform(()) > 0.25:
+    if grayscale:
         image = tf.image.rgb_to_grayscale(image)
 
     # Apply Gaussian blurring
@@ -126,9 +127,9 @@ def data_augmentation(image, mask):
         image = tf.numpy_function(gaussian_blur, [image], tf.float32)
         image = tf.convert_to_tensor(image, dtype=tf.float32)
 
-    return image, mask/255.
+    return image, mask
 
-def create_pipeline():
+def create_pipeline(train_samples, val_samples, data_augment=True):
     """
     Create a TensorFlow data pipeline for image preprocessing and augmentation.
 
@@ -137,20 +138,35 @@ def create_pipeline():
     """
     # Get paths for both RGB images and masks
     rgb_img_paths, masks_img_paths = get_file_paths()
+
+    # Shuffle
+    c = list(zip(rgb_img_paths, masks_img_paths))
+    random.shuffle(c)
+    rgb_img_paths, masks_img_paths = zip(*c)
     
+    train_rgb_img_paths = list(rgb_img_paths[:train_samples])
+    train_masks_img_paths = list(masks_img_paths[:train_samples])
+
+    val_rgb_img_paths = list(rgb_img_paths[train_samples:train_samples+val_samples])
+    val_masks_img_paths = list(masks_img_paths[train_samples:train_samples+val_samples])
+    # return train_rgb_img_paths, train_masks_img_paths, val_rgb_img_paths, val_masks_img_paths
     # Create a first dataset of image and mask paths
-    dataset = tf.data.Dataset.from_tensor_slices((rgb_img_paths, masks_img_paths))
+    train_ds = tf.data.Dataset.from_tensor_slices((train_rgb_img_paths, train_masks_img_paths))
+    val_ds = tf.data.Dataset.from_tensor_slices((val_rgb_img_paths, val_masks_img_paths))
 
     # Apply preprocessing steps to the images and the masks
-    dataset = dataset.map(preprocess_image, num_parallel_calls=AUTOTUNE)
+    train_ds = train_ds.map(preprocess_image, num_parallel_calls=AUTOTUNE)
+    val_ds = val_ds.map(preprocess_image, num_parallel_calls=AUTOTUNE)
 
-    # Apply data augmentation to the dataset
-    augmented_dataset = dataset.map(data_augmentation, num_parallel_calls=AUTOTUNE)
+    if data_augment:
+        # Apply data augmentation to the dataset
+        augmented_train_dataset = train_ds.map(data_augmentation, num_parallel_calls=AUTOTUNE)
+    
+        # Concatenate the original and the new datasets
+        train_ds = train_ds.concatenate(augmented_train_dataset)
 
-    # Concatenate the original and the new datasets
-    combined_dataset = dataset.concatenate(augmented_dataset)
-
-    return combined_dataset
+    return train_ds, val_ds, train_rgb_img_paths, train_masks_img_paths, val_rgb_img_paths, val_masks_img_paths
+    
 
 def make_list_of_elements(dataset):
     """
