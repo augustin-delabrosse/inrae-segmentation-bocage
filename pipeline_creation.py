@@ -52,15 +52,22 @@ def preprocess_image(image_path, mask_path):
     # Apply histogram equalization
     image_equalized = tf.numpy_function(equalize_histogram, [image_decoded], tf.float32)
     # Normalize the image
-    image_output = (image_equalized - tf.reduce_min(image_equalized)) / (tf.reduce_max(image_equalized) - tf.reduce_min(image_equalized))
+    image_normalized = image_equalized/255.# (image_equalized - tf.reduce_min(image_equalized)) / (tf.reduce_max(image_equalized) - tf.reduce_min(image_equalized))
+    # Crop the image
+    image_output = tf.image.crop_to_bounding_box(
+        image_normalized, 0, 0, 256, 256
+    )
 
     # Mask (same steps except no equalizing and normalizing)
     mask_string = tf.io.read_file(mask_path)
     mask_decoded = tf.image.decode_jpeg(mask_string, channels=1)
+    mask_output = tf.image.crop_to_bounding_box(
+        mask_decoded, 0, 0, 256, 256
+    )
     # Ensure mask_output is of type float32
-    mask_output = tf.cast(mask_decoded, tf.float32)
+    mask_output = tf.cast(mask_output, tf.float32)/255.
 
-    return (image_output, mask_output/255.)
+    return image_output, mask_output
 
 # Function to apply histogram equalization to an image
 def equalize_histogram(image):

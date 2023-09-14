@@ -41,6 +41,14 @@ def std_convoluted(im, N):
     # Calculate the standard deviation image
     return np.sqrt((s2 - s**2 / ns) / ns)
 
+def convolution(im, N):
+    # Calculate squared image and initialize kernel
+    kernel = np.ones((2*N+1, 2*N+1))
+    # Convolve the image and squared image with the kernel
+    s = scipy.signal.convolve2d(im, kernel, mode="same")
+    return s
+
+
 def my_func(path_to_orthophoto_rgb):
     """
     Create and save vignettes and masks from the RGB and IRC orthophotos.
@@ -89,9 +97,10 @@ def my_func(path_to_orthophoto_rgb):
                 # print(mnhc_file)
                 mnhc = np.asarray(Image.open(mnhc_file))
                 w, h = mnhc.shape
+                std_conv_mnhc = std_convoluted(mnhc,N=10)
                 mask = np.logical_and(np.logical_and(mnhc > 3., 
                                                      np.logical_or(mnhc > 5., 
-                                                                   std_convoluted(mnhc,N=10) > .5)
+                                                                   std_conv_mnhc > .5)
                                                     ),
                                       ndvi[mnhc_x*w:(mnhc_x+1)*w, mnhc_y*h:(mnhc_y+1)*h] > 0) \
                 .astype('uint8')
@@ -111,11 +120,16 @@ def my_func(path_to_orthophoto_rgb):
                         # Calculate characteristics of the RGB crop and add to the DataFrame
                         mask_2 = np.stack((crop_mask,)*3, axis=-1)
                         non_mask = np.logical_not(mask_2)
+                        non_crop_mask = np.logical_not(crop_mask)
                         res = [pos, crop_mask.sum()] + \
                         np.mean(crop_rgb, axis=(0, 1), where=mask_2.astype(bool)).tolist() + \
                         np.mean(crop_rgb, axis=(0, 1), where=non_mask.astype(bool)).tolist() + \
                         np.std(crop_rgb, axis=(0, 1), where=mask_2.astype(bool)).tolist() + \
-                        np.std(crop_rgb, axis=(0, 1), where=non_mask.astype(bool)).tolist()
+                        np.std(crop_rgb, axis=(0, 1), where=non_mask.astype(bool)).tolist() + \
+                        [np.mean(convolution(crop_rgb[:, :, 0], N=3), where=crop_mask.astype(bool)), np.mean(convolution(crop_rgb[:, :, 1], N=3), where=crop_mask.astype(bool)), np.mean(convolution(crop_rgb[:, :, 2], N=3), where=crop_mask.astype(bool))] + \
+                        [np.mean(convolution(crop_rgb[:, :, 0], N=3), where=non_crop_mask.astype(bool)), np.mean(convolution(crop_rgb[:, :, 1], N=3), where=non_crop_mask.astype(bool)), np.mean(convolution(crop_rgb[:, :, 2], N=3), where=non_crop_mask.astype(bool))] + \
+                        [np.std(convolution(crop_rgb[:, :, 0], N=3), where=crop_mask.astype(bool)), np.std(convolution(crop_rgb[:, :, 1], N=3), where=crop_mask.astype(bool)), np.std(convolution(crop_rgb[:, :, 2], N=3), where=crop_mask.astype(bool))] + \
+                        [np.std(convolution(crop_rgb[:, :, 0], N=3), where=non_crop_mask.astype(bool)), np.std(convolution(crop_rgb[:, :, 1], N=3), where=non_crop_mask.astype(bool)), np.std(convolution(crop_rgb[:, :, 2], N=3), where=non_crop_mask.astype(bool))] 
                         # vignette_data.append(res)
                         
                         # Append the list to the DataFrame
