@@ -4,6 +4,7 @@ from glob import glob
 import itertools
 import numpy as np
 import random
+from tqdm import tqdm
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
@@ -31,6 +32,28 @@ def get_file_paths():
         )
     )
     return rgb_img_paths, masks_img_paths
+
+def weights_to_apply():
+    rgb_img_paths, masks_img_paths = get_file_paths()
+    ones = 0
+    for i in tqdm(masks_img_paths):
+        mask = cv2.imread(i)
+        shape = mask[:,:,0].shape
+        
+        if mask[:,:,0].max() > 1.:
+            ones += (mask[:,:,0]/255.).sum()
+        else:
+            ones += (mask[:,:,0]).sum()
+    
+    total = len(masks_img_paths) * shape[0] * shape[1]
+    zeros = total - ones
+    
+    weight_for_0 = (1 / zeros) * (total / 2.0)
+    weight_for_1 = (1 / ones) * (total / 2.0)
+    
+    weights_to_apply = {0: weight_for_0, 1:weight_for_1}
+
+    return weights_to_apply
 
 # Function to preprocess an image with histogram equalization
 def preprocess_image(image_path, mask_path):
