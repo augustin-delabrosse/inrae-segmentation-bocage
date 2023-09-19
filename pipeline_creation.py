@@ -76,6 +76,8 @@ def preprocess_image(image_path, mask_path):
     image_equalized = tf.numpy_function(equalize_histogram, [image_decoded], tf.float32)
     # Normalize the image
     image_normalized = image_equalized/255.# (image_equalized - tf.reduce_min(image_equalized)) / (tf.reduce_max(image_equalized) - tf.reduce_min(image_equalized))
+    # To grayscale
+    # image_grayscaled = tf.image.rgb_to_grayscale(image_normalized)
     # Crop the image
     image_output = tf.image.crop_to_bounding_box(
         image_normalized, 0, 0, 256, 256
