@@ -95,7 +95,7 @@ def preprocess_image(image_path, mask_path):
     return image_output, mask_output
 
 # Function to apply histogram equalization to an image
-def equalize_histogram(image):
+def equalize_histogram(image, convert_to_tensors=True):
     """
     Apply histogram equalization to an RGB image.
 
@@ -105,14 +105,20 @@ def equalize_histogram(image):
     Returns:
     - tf.Tensor: Image after histogram equalization.
     """
+    # Convert if needed to np.uint8 format
+    # if np.max(image) <= 1.:
+    #     image = np.uint8(image*255)
+    
     # Convert RGB to YUV
     image_yuv = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
     # Apply histogram equalization to the Y channel
     image_yuv[:,:,0] = cv2.equalizeHist(image_yuv[:,:,0])
     # Convert YUV back to RGB
     image_output = cv2.cvtColor(image_yuv, cv2.COLOR_YUV2RGB)
-    # Convert back to tensor
-    image_output = tf.convert_to_tensor(image_output, dtype=tf.float32)
+
+    if convert_to_tensors:
+        # Convert back to tensor
+        image_output = tf.convert_to_tensor(image_output, dtype=tf.float32)
     return image_output
 
 def gaussian_blur(image, kernel_size=(3, 3)):
