@@ -49,7 +49,7 @@ def convolution(im, N):
     return s
 
 
-def my_func(path_to_orthophoto_rgb):
+def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
     """
     Create and save vignettes and masks from the RGB and IRC orthophotos.
 
@@ -144,4 +144,72 @@ def my_func(path_to_orthophoto_rgb):
     df.drop_duplicates(subset='file').to_csv(config['stat_vignettes_path'])
     
     return df
+
+
+def vignette_creation_func(path_to_orthophoto_rgb, w=2000, h=2000):
+    """
+    Create and save vignettes and masks from the RGB and IRC orthophotos.
+
+    Parameters:
+    - path_to_orthophoto_rgb (str): Path to the orthophoto RGB image.
+
+    Returns:
+    - pd.DataFrame: DataFrame containing stats about the vignettes.
+    """
+    Image.MAX_IMAGE_PIXELS = None
+    
+    rgb_name = os.path.basename(path_to_orthophoto_rgb)
+    dept = rgb_name[:2]
+    year = rgb_name[3:7]
+    
+    # Extract coordinates from RGB orthophoto path
+    rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos']: config['rgb_coordinates_pos']+3]
+    rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos']+4: config['rgb_coordinates_pos']+8]
+    
+    # Open and resize RGB images
+    ortho_rgb = cv2.resize(np.asarray(Image.open(path_to_orthophoto_rgb)), (10000, 10000), interpolation=cv2.INTER_AREA)
+    
+    # Create output directories if they don't exist
+    if not os.path.exists(config['rgb_older_vignettes_path'] + f'rgb_{year}/'):
+        os.makedirs(config['rgb_older_vignettes_path'] + f'rgb_{year}/')
+    if not os.path.exists(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/'):
+        os.makedirs(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/')
+
+    # Read existing DataFrame or create a new one
+    if os.path.exists(config['stat_older_vignettes_path']):
+        df = pd.read_csv(config['stat_older_vignettes_path'], index_col="Unnamed: 0")
+    else:
+        df = pd.DataFrame(columns=config['stat_older_vignettes_col'])
+
+    for mnhc_x in tqdm(range(0,5)):
+        for mnhc_y in range(0,5):
+            
+            for x in range(0, w-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
+                for y in range(0, h-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
+                    
+                    crop_rgb = ortho_rgb[mnhc_y*h+y: mnhc_y*h+y+config['img_size']+config['border']*2, mnhc_x*w+x: mnhc_x*w+x+config['img_size']+config['border']*2, :]
+                    
+                    pos = dept+'_'+str(int((int(rgb_x)+mnhc_x)*1000+x/2))+'_'+str(int((int(rgb_y)-mnhc_y)*1000+y/2))
+                    
+                    cv2.imwrite(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/' + f'rgb_{year}_' + str(pos) + '.jpg', crop_rgb)
+                    
+                    # Calculate characteristics of the RGB crop and add to the DataFrame
+                    res = [pos, crop_rgb.sum()] + \
+                    np.mean(crop_rgb, axis=(0, 1)).tolist() + \
+                    np.std(crop_rgb, axis=(0, 1)).tolist() + \
+                    [np.mean(convolution(crop_rgb[:, :, 0], N=3)), np.mean(convolution(crop_rgb[:, :, 1], N=3)), np.mean(convolution(crop_rgb[:, :, 2], N=3))] + \
+                    [np.std(convolution(crop_rgb[:, :, 0], N=3)), np.std(convolution(crop_rgb[:, :, 1], N=3)), np.std(convolution(crop_rgb[:, :, 2], N=3))] 
+                    # vignette_data.append(res)
+                    
+                    # Append the list to the DataFrame
+                    df.loc[len(df) + len(set(range(df.index[-1]))-set(df.index))
+                    if len(df.index) > 0
+                    else 0] = res
+            
+                # If more images are needed, comment the break
+                break
                 
+    # Drop duplicates and save the DataFrame to a CSV file
+    df.drop_duplicates(subset='file').to_csv(config['stat_older_vignettes_path'])
+    
+    return df

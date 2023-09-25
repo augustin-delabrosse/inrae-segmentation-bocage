@@ -6,35 +6,13 @@ import numpy as np
 import random
 from tqdm import tqdm
 
+from utils import get_training_file_paths
+
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
-def get_file_paths():
-    """
-    Get file paths for RGB images and mask images.
-
-    Returns:
-    - list: List of RGB image paths.
-    - list: List of mask image paths.
-    """
-    # Define your dataset paths
-    rgb_img_paths = sorted(
-        list(
-            itertools.chain.from_iterable(
-                [glob(i + "*.jpg") for i in glob("vignettes/rgb/*/", recursive=True)]
-            )
-        )
-    )
-    masks_img_paths = sorted(
-        list(
-            itertools.chain.from_iterable(
-                [glob(i + "*.png") for i in glob("vignettes/mask/*/", recursive=True)]
-            )
-        )
-    )
-    return rgb_img_paths, masks_img_paths
 
 def weights_to_apply():
-    rgb_img_paths, masks_img_paths = get_file_paths()
+    rgb_img_paths, masks_img_paths = get_training_file_paths()
     ones = 0
     for i in tqdm(masks_img_paths):
         mask = cv2.imread(i)
@@ -175,7 +153,7 @@ def create_pipeline(train_samples, val_samples, data_augment=True):
     - tf.data.Dataset: Combined dataset with preprocessed and augmented images.
     """
     # Get paths for both RGB images and masks
-    rgb_img_paths, masks_img_paths = get_file_paths()
+    rgb_img_paths, masks_img_paths = get_training_file_paths()
 
     # Shuffle
     c = list(zip(rgb_img_paths, masks_img_paths))

@@ -43,7 +43,7 @@ def DiceBCELoss(y_true, y_pred, smooth=1e-6):
     
     return Dice_BCE
 
-
+@keras.saving.register_keras_serializable(package="MyLoss")
 def tversky(y_true, y_pred, alpha=0.7, smooth=1e-6):
     y_true_pos = K.flatten(y_true)
     y_pred_pos = K.flatten(y_pred)
@@ -52,6 +52,7 @@ def tversky(y_true, y_pred, alpha=0.7, smooth=1e-6):
     false_pos = K.sum((1-y_true_pos)*y_pred_pos)
     return (true_pos + smooth)/(true_pos + alpha*false_neg + (1-alpha)*false_pos + smooth)
 
+@keras.saving.register_keras_serializable(package="MyLoss")
 def focal_tversky(y_true,y_pred, gamma=1.33, smooth=1e-6):
     pt_1 = tversky(y_true, y_pred, smooth=smooth)
     return K.pow((1-pt_1), gamma)
