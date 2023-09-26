@@ -218,70 +218,102 @@ class Losses:
         return combo
 
 
-def load_preprocess_images(rgb,
-                           equalize,
-                           max_samples = None,
-                           img_row=config['img_size'], 
-                           img_col=config['img_size'],
-                           gt_chan = 1,
-                           test_split=0.2):
+class LoadPreprocessImages:
+    @staticmethod
+    def equalize_histogram(image, convert_to_tensors=True):
+        """
+        Apply histogram equalization to an RGB image.
 
-    if rgb:
-        img_chan = 3
-    else:
-        img_chan = 1
+        Parameters:
+        - image (tf.Tensor): Input RGB image.
 
-    img_list, gt_list = get_training_file_paths()
-    
-    if max_samples:
-        random_indices = get_random_indices(range(len(img_list)), max_samples)
-        random_indices.sort()
-        img_list = np.array(img_list)[random_indices].tolist()
-        gt_list = np.array(gt_list)[random_indices].tolist()
-    
-    num_imgs = len(img_list)
+        Returns:
+        - tf.Tensor: Image after histogram equalization.
+        """
+        # Convert RGB to YUV
+        image_yuv = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
+        # Apply histogram equalization to the Y channel
+        image_yuv[:,:,0] = cv2.equalizeHist(image_yuv[:,:,0])
+        # Convert YUV back to RGB
+        image_output = cv2.cvtColor(image_yuv, cv2.COLOR_YUV2RGB)
 
-    if rgb:
-        imgs = np.zeros((num_imgs, img_row, img_col, 3))
-    else:
-        imgs = np.zeros((num_imgs, img_row, img_col))
-    gts = np.zeros((num_imgs, img_row, img_col))
-    
-    for i in tqdm(range(num_imgs)):
-        tmp_img = plt.imread(img_list[i])
-        tmp_gt = plt.imread(gt_list[i])
-        
-        img = cv2.resize(tmp_img, (img_col,img_row), interpolation=cv2.INTER_NEAREST)
-        gt = cv2.resize(tmp_gt,(img_col,img_row), interpolation=cv2.INTER_NEAREST)
+        if convert_to_tensors:
+            # Convert back to tensor
+            image_output = tf.convert_to_tensor(image_output, dtype=tf.float32)
+        return image_output
+
+    @staticmethod
+    def adap_hist_equalize(img):
+        # histogram equalization
+        equalized_image = cv2.equalizeHist(img)
+        # Adaptive histogram equalization is supposed to be more robust
+        # CLAHE = Contrast Limited Adaptive Histogram Equalization
+        # Create a CLAHE object
+        clahe = cv2.createCLAHE(clipLimit=3, tileGridSize=(8, 8))
+        # Apply CLAHE to the image
+        adap_equalized_image = clahe.apply(equalized_image)
+        return adap_equalized_image
+
+    @staticmethod
+    def load_preprocess_images(rgb, equalize, add_noise, max_samples=None, img_row=256, img_col=256, gt_chan=1, test_split=0.2):
+        if rgb:
+            img_chan = 3
+        else:
+            img_chan = 1
+
+        img_list, gt_list = get_training_file_paths()
+
+        if max_samples:
+            random_indices = get_random_indices(range(len(img_list)), max_samples)
+            random_indices.sort()
+            img_list = np.array(img_list)[random_indices].tolist()
+            gt_list = np.array(gt_list)[random_indices].tolist()
+
+        num_imgs = len(img_list)
+
+        if rgb:
+            imgs = np.zeros((num_imgs, img_row, img_col, 3))
+        else:
+            imgs = np.zeros((num_imgs, img_row, img_col))
+        gts = np.zeros((num_imgs, img_row, img_col))
+
+        for i in tqdm(range(num_imgs)):
+            tmp_img = plt.imread(img_list[i])
+            tmp_gt = plt.imread(gt_list[i])
+
+            img = cv2.resize(tmp_img, (img_col, img_row), interpolation=cv2.INTER_NEAREST)
+            gt = cv2.resize(tmp_gt, (img_col, img_row), interpolation=cv2.INTER_NEAREST)
+
+            if add_noise:
+                img = (img + 1 * img.std() * np.random.random(img.shape)).astype(np.uint8)
+                
+            if rgb:
+                if equalize:
+                    img = LoadPreprocessImages.equalize_histogram(img, convert_to_tensors=False)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                if equalize:
+                    img = LoadPreprocessImages.adap_hist_equalize(img)
+
+            if img.max() > 1:
+                img = img / 255.
+            if gt.max() > 1:
+                gt = gt / 255.
+
+            imgs[i] = img
+            gts[i] = gt
+
+        indices = np.arange(0, num_imgs, 1)
+
+        imgs_train, imgs_test, \
+        imgs_mask_train, imgs_mask_test, \
+        trainIdx, testIdx = train_test_split(imgs, gts, indices, test_size=test_split)
 
         if not rgb:
-            img = color.rgb2gray(img)
+            imgs_train = np.expand_dims(imgs_train, axis=3)
+            imgs_test = np.expand_dims(imgs_test, axis=3)
 
-        if equalize:
-            img = equalize_histogram(img, convert_to_tensors=False)
-        
-        if img.max() > 1:
-            img = img/255.
-        if gt.max() > 1:
-            gt = gt/255.
-            
-        imgs[i] = img
-        gts[i] = gt
+        imgs_mask_train = np.expand_dims(imgs_mask_train, axis=3)
+        imgs_mask_test = np.expand_dims(imgs_mask_test, axis=3)
 
-    
-    indices = np.arange(0, num_imgs, 1)
-    
-    imgs_train, imgs_test, \
-    imgs_mask_train, imgs_mask_test,\
-    trainIdx, testIdx = train_test_split(imgs, gts, indices, test_size=test_split)
-
-    if not rgb :
-        imgs_train = np.expand_dims(imgs_train, axis=3)
-        imgs_test = np.expand_dims(imgs_test, axis=3)
-
-    imgs_mask_train = np.expand_dims(imgs_mask_train,axis=3)
-    imgs_mask_test = np.expand_dims(imgs_mask_test,axis=3)
-
-    return imgs_train, imgs_mask_train, imgs_test, imgs_mask_test
-    
-    
+        return imgs_train, imgs_mask_train, imgs_test, imgs_mask_test
