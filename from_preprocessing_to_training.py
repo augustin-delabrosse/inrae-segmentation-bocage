@@ -274,7 +274,7 @@ class LoadPreprocessImages:
         if rgb:
             imgs = np.zeros((num_imgs, img_row, img_col, 3))
         else:
-            imgs = np.zeros((num_imgs, img_row, img_col))
+            imgs = np.zeros((num_imgs, img_row, img_col, 1))
         gts = np.zeros((num_imgs, img_row, img_col))
 
         for i in tqdm(range(num_imgs)):
@@ -299,8 +299,8 @@ class LoadPreprocessImages:
                 img = img / 255.
             if gt.max() > 1:
                 gt = gt / 255.
-
-            imgs[i] = img
+            
+            imgs[i] = img # np.stack([img]*3, axis=2)# img
             gts[i] = gt
 
         indices = np.arange(0, num_imgs, 1)
