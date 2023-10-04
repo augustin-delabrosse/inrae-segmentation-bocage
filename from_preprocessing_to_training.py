@@ -255,7 +255,7 @@ class LoadPreprocessImages:
         return adap_equalized_image
 
     @staticmethod
-    def load_preprocess_images(rgb, equalize, add_noise, max_samples=None, img_row=256, img_col=256, gt_chan=1, test_split=0.2):
+    def load_preprocess_images(rgb, equalize, add_noise, noise=2, max_samples=None, img_row=256, img_col=256, gt_chan=1, test_split=0.2):
         if rgb:
             img_chan = 3
         else:
@@ -274,7 +274,7 @@ class LoadPreprocessImages:
         if rgb:
             imgs = np.zeros((num_imgs, img_row, img_col, 3))
         else:
-            imgs = np.zeros((num_imgs, img_row, img_col, 1))
+            imgs = np.zeros((num_imgs, img_row, img_col))
         gts = np.zeros((num_imgs, img_row, img_col))
 
         for i in tqdm(range(num_imgs)):
@@ -285,7 +285,7 @@ class LoadPreprocessImages:
             gt = cv2.resize(tmp_gt, (img_col, img_row), interpolation=cv2.INTER_NEAREST)
 
             if add_noise:
-                img = (img + 1 * img.std() * np.random.random(img.shape)).astype(np.uint8)
+                img = (img + noise * img.std() * np.random.random(img.shape)).astype(np.uint8)
                 
             if rgb:
                 if equalize:
