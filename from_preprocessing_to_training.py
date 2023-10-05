@@ -9,6 +9,7 @@ from keras.layers import UpSampling2D, Dropout, BatchNormalization
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.initializers import glorot_normal
 from keras.layers import AveragePooling2D
+from tensorflow.keras.preprocessing.image import load_img
 from sklearn.model_selection import train_test_split
 
 from keras import backend as K
@@ -255,7 +256,7 @@ class LoadPreprocessImages:
         return adap_equalized_image
 
     @staticmethod
-    def load_preprocess_images(rgb, equalize, add_noise, noise=2, max_samples=None, img_row=256, img_col=256, gt_chan=1, test_split=0.2):
+    def load_preprocess_images(rgb, equalize, add_noise, std_noise=7, max_samples=None, img_row=256, img_col=256, gt_chan=1, test_split=0.2, shuffle=True):
         if rgb:
             img_chan = 3
         else:
@@ -284,9 +285,6 @@ class LoadPreprocessImages:
             img = cv2.resize(tmp_img, (img_col, img_row), interpolation=cv2.INTER_NEAREST)
             gt = cv2.resize(tmp_gt, (img_col, img_row), interpolation=cv2.INTER_NEAREST)
 
-            if add_noise:
-                img = (img + noise * img.std() * np.random.random(img.shape)).astype(np.uint8)
-                
             if rgb:
                 if equalize:
                     img = LoadPreprocessImages.equalize_histogram(img, convert_to_tensors=False)
@@ -294,6 +292,14 @@ class LoadPreprocessImages:
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
                 if equalize:
                     img = LoadPreprocessImages.adap_hist_equalize(img)
+
+            
+            if add_noise:
+                gaussian = np.round(np.random.normal(0, std_noise, (img.shape)))
+                img = img + gaussian
+                # img = (img + noise * img.std() * np.random.random(img.shape)).astype(np.uint8)
+                
+            
 
             if img.max() > 1:
                 img = img / 255.
@@ -307,7 +313,7 @@ class LoadPreprocessImages:
 
         imgs_train, imgs_test, \
         imgs_mask_train, imgs_mask_test, \
-        trainIdx, testIdx = train_test_split(imgs, gts, indices, test_size=test_split)
+        trainIdx, testIdx = train_test_split(imgs, gts, indices, test_size=test_split, shuffle=shuffle)
 
         if not rgb:
             imgs_train = np.expand_dims(imgs_train, axis=3)
@@ -317,3 +323,60 @@ class LoadPreprocessImages:
         imgs_mask_test = np.expand_dims(imgs_mask_test, axis=3)
 
         return imgs_train, imgs_mask_train, imgs_test, imgs_mask_test
+
+
+class orthosSequence(keras.utils.Sequence):
+    """Helper to iterate over the data (as Numpy arrays)."""
+
+    def __init__(self, batch_size, input_img_paths, target_img_paths, rgb, add_noise, std_noise=7, segformer=False, img_size=(256, 256), smooth = 0):
+        
+        self.batch_size = batch_size
+        self.img_size = img_size
+        self.input_img_paths = input_img_paths
+        self.target_img_paths = target_img_paths
+        self.smooth = smooth
+        self.rgb = rgb
+        self.add_noise = add_noise
+        self.std_noise = std_noise
+        self.img_size = img_size
+        self.segformer = segformer
+
+    def __len__(self):
+        return len(self.target_img_paths) // self.batch_size
+
+    def __getitem__(self, idx):
+        """Returns tuple (input, target) correspond to batch #idx."""
+        i = idx * self.batch_size
+        batch_input_img_paths = self.input_img_paths[i : i + self.batch_size]
+        batch_target_img_paths = self.target_img_paths[i : i + self.batch_size]
+
+        if self.rgb:
+            x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
+        else:
+            if self.segformer:
+                x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
+            else:
+                x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        for j in range(len(batch_input_img_paths)):
+            img_path = batch_input_img_paths[j]
+            mask_path = batch_target_img_paths[j]
+            img = load_img(img_path, target_size=self.img_size)
+            img = np.asarray(img)
+            if not self.rgb:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            if self.add_noise:
+                gaussian = np.round(np.random.normal(0, self.std_noise, (img.shape)))
+                img = img + gaussian
+                # img = (img + self.noise * img.std() * np.random.random(img.shape)).astype(np.uint8)
+            if img.max() > 1:
+                img = img/255.
+            x[j] = img if self.rgb else (np.stack([img]*3, axis=2) if self.segformer else np.expand_dims(img, 2))#gaussian_filter(img, sigma=(self.smooth,self.smooth,0))
+        
+            img = load_img(mask_path, target_size=self.img_size, color_mode="grayscale")
+            img = np.asarray(img)
+            if img.max() > 1:
+                img = img/255.
+            y[j] = np.expand_dims(img, 2)
+            
+        return x, y

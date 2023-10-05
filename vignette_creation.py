@@ -194,7 +194,7 @@ def vignette_creation_func(path_to_orthophoto_rgb, w=2000, h=2000):
                     cv2.imwrite(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/' + f'rgb_{year}_' + str(pos) + '.jpg', crop_rgb)
                     
                     # Calculate characteristics of the RGB crop and add to the DataFrame
-                    res = [pos, crop_rgb.sum()] + \
+                    res = [year, pos, crop_rgb.sum()] + \
                     np.mean(crop_rgb, axis=(0, 1)).tolist() + \
                     np.std(crop_rgb, axis=(0, 1)).tolist() + \
                     [np.mean(convolution(crop_rgb[:, :, 0], N=3)), np.mean(convolution(crop_rgb[:, :, 1], N=3)), np.mean(convolution(crop_rgb[:, :, 2], N=3))] + \

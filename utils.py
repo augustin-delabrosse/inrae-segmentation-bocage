@@ -1,9 +1,13 @@
 import numpy as np
+from scipy.signal import convolve2d
+import math
 import random
 from glob import glob
 import itertools
 import tensorflow as tf
 from tensorflow import keras
+import torch
+from torch.nn.functional import interpolate
 
 from keras import backend as K
 
@@ -92,3 +96,45 @@ def load_custom_model(model_path, custom_objects_list):
         custom_objects=custom_objects_dict
     )
     return loaded_model
+
+
+def estimate_noise(img):
+
+  H, W = img.shape
+
+  M = [[1, -2, 1],
+       [-2, 4, -2],
+       [1, -2, 1]]
+
+  sigma = np.sum(np.sum(np.absolute(convolve2d(img, M))))
+  sigma = sigma * math.sqrt(0.5 * math.pi) / (6 * (W-2) * (H-2))
+
+  return sigma
+
+
+def interpolate_segformer_outputs(preds, output_size: tuple=(256, 256)):
+    """
+    Bilinear nterpolate segmentation model outputs from a TensorFlow tensor to a PyTorch tensor with a specified output size. 
+    The resulting tensor will have a shape of (None, height, width, 1) and can be used for further processing or visualization.
+
+    Args:
+        preds (Tensor): A TensorFlow tensor containing segmentation model predictions with shape (None, None, None, 1).
+        output_size (tuple, optional): The desired output size of the interpolated tensor in the format (height, width).
+            Default is (256, 256).
+
+    Returns:
+        Tensor: A PyTorch tensor containing the interpolated segmentation model predictions with shape (None, height, width, 1).
+
+    Example:
+        # Resize TensorFlow segmentation model outputs to (256, 256) using bilinear interpolation
+        interpolated_preds = interpolate_segformer_outputs(preds, output_size=(256, 256))
+    """
+    pytorch_preds = torch.from_numpy(preds.numpy()).float()
+    
+    # Perform interpolation with the correct dimension order and mode
+    interpolated_preds = interpolate(pytorch_preds.permute(0, 3, 1, 2), size=output_size, mode='bilinear', align_corners=False)
+    
+    # Permute dimensions to get the desired shape (1, 256, 256, 1)
+    interpolated_preds = interpolated_preds.permute(0, 2, 3, 1)
+
+    return interpolated_preds
