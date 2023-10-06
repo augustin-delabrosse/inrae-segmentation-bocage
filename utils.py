@@ -3,6 +3,7 @@ from scipy.signal import convolve2d
 import math
 import random
 from glob import glob
+from PIL import Image
 import itertools
 import tensorflow as tf
 from tensorflow import keras
@@ -138,3 +139,17 @@ def interpolate_segformer_outputs(preds, output_size: tuple=(256, 256)):
     interpolated_preds = interpolated_preds.permute(0, 2, 3, 1)
 
     return interpolated_preds
+
+def gray_svd_decomposition(img, k):
+    img           = Image.fromarray(img)
+    img_mat       = np.array(list(img.getdata(band=0)), float)
+    img_mat.shape = (img.size[1], img.size[0])
+    img_mat       = np.matrix(img_mat)
+    
+    
+    # Perform Singular Value Decomposition
+    U, sigma, V = np.linalg.svd(img_mat)
+    
+    # Image reconstruction
+    reconstimg = np.matrix(U[:, :k]) * np.diag(sigma[:k]) * np.matrix(V[:k, :])
+    return reconstimg
