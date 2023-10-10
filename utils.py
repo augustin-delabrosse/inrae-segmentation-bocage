@@ -24,14 +24,14 @@ def get_training_file_paths():
     rgb_img_paths = sorted(
         list(
             itertools.chain.from_iterable(
-                [glob(i + "*.jpg") for i in glob("vignettes/rgb/*/", recursive=True)]
+                [glob(i + "*.jpg") for i in glob("vignettes/rgb/*/*/", recursive=True)]
             )
         )
     )
     masks_img_paths = sorted(
         list(
             itertools.chain.from_iterable(
-                [glob(i + "*.png") for i in glob("vignettes/mask/*/", recursive=True)]
+                [glob(i + "*.png") for i in glob("vignettes/mask/*/*/", recursive=True)]
             )
         )
     )

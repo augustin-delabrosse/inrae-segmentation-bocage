@@ -65,6 +65,8 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
     dept = rgb_name[:2]
     year = rgb_name[3:7]
     path_to_orthophoto_irc = config["irc_path"][dept][year] + rgb_name[:config['irc_pos']] + '-IRC' + rgb_name[config['irc_pos']:]
+
+    # print(dept, year, rgb_name, path_to_orthophoto_irc)
     
     # Extract coordinates from RGB orthophoto path
     rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos']: config['rgb_coordinates_pos']+3]
@@ -78,10 +80,10 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
     ortho_irc = None 
     
     # Create output directories if they don't exist
-    if not os.path.exists(config['rgb_vignettes_path'] + f'rgb_{rgb_x}_{rgb_y}/'):
-        os.makedirs(config['rgb_vignettes_path'] + f'rgb_{rgb_x}_{rgb_y}/')
-    if not os.path.exists(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/'):
-        os.makedirs(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/')
+    if not os.path.exists(config['rgb_vignettes_path'] + f'{dept}/' + f'rgb_{rgb_x}_{rgb_y}/'):
+        os.makedirs(config['rgb_vignettes_path'] + f'{dept}/' + f'rgb_{rgb_x}_{rgb_y}/')
+    if not os.path.exists(config['mask_vignettes_path'] + f'{dept}/' + f'mask_{rgb_x}_{rgb_y}/'):
+        os.makedirs(config['mask_vignettes_path'] + f'{dept}/' + f'mask_{rgb_x}_{rgb_y}/')
 
     # Read existing DataFrame or create a new one
     if os.path.exists(config['stat_vignettes_path']):
@@ -114,14 +116,14 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
 
                         pos = dept+'_'+str(int((int(rgb_x)+mnhc_x)*1000+x/2))+'_'+str(int((int(rgb_y)-mnhc_y)*1000+y/2))
                         
-                        cv2.imwrite(config['rgb_vignettes_path'] + f'rgb_{rgb_x}_{rgb_y}/' + 'rgb_' + str(pos) + '.jpg', crop_rgb)
-                        cv2.imwrite(config['mask_vignettes_path'] + f'mask_{rgb_x}_{rgb_y}/' + 'mask_'+ str(pos) + '.png', crop_mask*255)
+                        cv2.imwrite(config['rgb_vignettes_path'] + f'{dept}/' + f'rgb_{rgb_x}_{rgb_y}/' + 'rgb_' + str(pos) + '.jpg', crop_rgb)
+                        cv2.imwrite(config['mask_vignettes_path'] + f'{dept}/' + f'mask_{rgb_x}_{rgb_y}/' + 'mask_'+ str(pos) + '.png', crop_mask*255)
 
                         # Calculate characteristics of the RGB crop and add to the DataFrame
                         mask_2 = np.stack((crop_mask,)*3, axis=-1)
                         non_mask = np.logical_not(mask_2)
                         non_crop_mask = np.logical_not(crop_mask)
-                        res = [pos, crop_mask.sum()] + \
+                        res = [dept, pos, crop_mask.sum()] + \
                         np.mean(crop_rgb, axis=(0, 1), where=mask_2.astype(bool)).tolist() + \
                         np.mean(crop_rgb, axis=(0, 1), where=non_mask.astype(bool)).tolist() + \
                         np.std(crop_rgb, axis=(0, 1), where=mask_2.astype(bool)).tolist() + \
