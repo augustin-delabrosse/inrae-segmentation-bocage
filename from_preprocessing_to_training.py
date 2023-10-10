@@ -351,6 +351,8 @@ class orthosSequence(keras.utils.Sequence):
         batch_input_img_paths = self.input_img_paths[i : i + self.batch_size]
         batch_target_img_paths = self.target_img_paths[i : i + self.batch_size]
 
+        # print(batch_input_img_paths)
+        # print(batch_target_img_paths)
         if self.rgb:
             x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
         else:
@@ -359,9 +361,13 @@ class orthosSequence(keras.utils.Sequence):
             else:
                 x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
         y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        # print(x.shape, y.shape)
         for j in range(len(batch_input_img_paths)):
             img_path = batch_input_img_paths[j]
             mask_path = batch_target_img_paths[j]
+
+            # print(img_path + ' I ' + mask_path)
+            
             img = load_img(img_path, target_size=self.img_size)
             img = np.asarray(img)
             if not self.rgb:
@@ -375,10 +381,10 @@ class orthosSequence(keras.utils.Sequence):
                 img = img/255.
             x[j] = img if self.rgb else (np.stack([img]*3, axis=2) if self.segformer else np.expand_dims(img, 2))#gaussian_filter(img, sigma=(self.smooth,self.smooth,0))
         
-            img = load_img(mask_path, target_size=self.img_size, color_mode="grayscale")
-            img = np.asarray(img)
-            if img.max() > 1:
-                img = img/255.
-            y[j] = np.expand_dims(img, 2)
+            mask = load_img(mask_path, target_size=self.img_size, color_mode="grayscale")
+            mask = np.asarray(mask)
+            if mask.max() > 1:
+                mask = mask/255.
+            y[j] = np.expand_dims(mask, 2)
             
         return x, y
