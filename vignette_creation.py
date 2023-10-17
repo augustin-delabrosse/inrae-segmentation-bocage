@@ -93,20 +93,31 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
 
     for mnhc_x in tqdm(range(0,5)):
         for mnhc_y in range(0,5):
-            mnhc_file = mnhc_dir_dept+'Diff_MNS_CORREL_1-0_LAMB93_20FD'+dept+'25_'+str(int(int(rgb_x)+mnhc_x))+'_'+str(int(int(rgb_y)-mnhc_y))+'.tif'
+            if dept == '35':
+                mnhc_file = mnhc_dir_dept+'Diff_MNS_CORREL_1-0_LAMB93_20FD'+dept+'25_'+str(int(int(rgb_x)+mnhc_x))+'_'+str(int(int(rgb_y)-mnhc_y))+'.tif'
+            else:
+                mnhc_file = mnhc_dir_dept+'Diff_MNS_CORREL_1-0_LAMB93_20FD'+dept+'25_'+str(int(int(rgb_x)+mnhc_x))+'_'+str(int(int(rgb_y)-(mnhc_y+1)))+'.tif'
             
             if os.path.exists(mnhc_file):
                 # print(mnhc_file)
                 mnhc = np.asarray(Image.open(mnhc_file))
                 w, h = mnhc.shape
                 std_conv_mnhc = std_convoluted(mnhc,N=10)
-                mask = np.logical_and(np.logical_and(mnhc > 3., 
-                                                     np.logical_or(mnhc > 5., 
-                                                                   std_conv_mnhc > .5)
-                                                    ),
-                                      ndvi[mnhc_x*w:(mnhc_x+1)*w, mnhc_y*h:(mnhc_y+1)*h] > 0) \
-                .astype('uint8')
-
+                if dept == '35':
+                    mask = np.logical_and(np.logical_and(mnhc > 3., 
+                                                         np.logical_or(mnhc > 5., 
+                                                                       std_conv_mnhc > .5)
+                                                        ),
+                                          ndvi[mnhc_x*w:(mnhc_x+1)*w, mnhc_y*h:(mnhc_y+1)*h] > 0) \
+                    .astype('uint8')
+                else:
+                    mask = np.logical_and(np.logical_and(mnhc > 3., 
+                                                         np.logical_or(mnhc > 5., 
+                                                                       std_conv_mnhc > .5)
+                                                        ),
+                                          ndvi[mnhc_y*h:(mnhc_y+1)*h, mnhc_x*w:(mnhc_x+1)*w] > 0) \
+                    .astype('uint8')
+                # mnhc_y*h:(mnhc_y+1)*h, mnhc_x*w:(mnhc_x+1)*w
                 
                 for x in range(0, w-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
                     for y in range(0, h-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
