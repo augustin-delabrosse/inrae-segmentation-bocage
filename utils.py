@@ -16,7 +16,7 @@ from keras import backend as K
 from glob import glob
 import itertools
 
-def get_training_file_paths(divide_by_dept=False):
+def get_file_paths(divide_by_dept=False):
     """
     Get file paths for RGB images and mask images.
 
@@ -28,7 +28,8 @@ def get_training_file_paths(divide_by_dept=False):
     if divide_by_dept:
         rgb_img_paths = {}
         masks_img_paths = {}
-        for i in list(os.walk(r'vignettes/rgb/'))[0][1][1:]:
+        depts = [i for i in list(os.walk(r'vignettes/rgb/'))[0][1] if not i.startswith('.')]
+        for i in depts:
             rgb_img_paths[f'{i}'] = sorted(
                 list(
                     itertools.chain.from_iterable(
@@ -111,6 +112,46 @@ def get_random_indices(input_list, n):
     random_indices = random.sample(range(len(input_list)), n)
     
     return random_indices
+
+def get_training_files_paths(input_img_paths, target_img_paths, max_samples, divide_by_dept=True):
+    if divide_by_dept:
+        if max_samples:
+            img_paths = np.array([])
+            mask_paths = np.array([])
+            
+            total_added_samples = 0
+            
+            for idx, dept in enumerate(input_img_paths.keys()):
+                # print(max_samples-total_added_samples, len(input_img_paths.keys())-idx)
+                
+                n_samples = (max_samples-total_added_samples)/(len(input_img_paths.keys())-idx)
+                
+                max = len(input_img_paths[dept])
+            
+                added_samples = int(np.min([n_samples, max]))
+                total_added_samples += added_samples
+                
+                random_indices = get_random_indices(range(added_samples), added_samples)
+                random_indices.sort()
+            
+                img_paths = np.append(img_paths, np.array(input_img_paths[dept])[random_indices])
+                mask_paths = np.append(mask_paths, np.array(target_img_paths[dept])[random_indices])
+            
+                # print(dept, max, n_samples, added_samples)
+        else:
+            img_paths = sorted({x for v in input_img_paths.values() for x in v})
+            mask_paths = sorted({x for v in target_img_paths.values() for x in v})
+    else :
+        if max_samples:
+            random_indices = get_random_indices(range(len(input_img_paths)), max_samples)
+            random_indices.sort()
+            img_paths = np.array(input_img_paths)[random_indices].tolist()
+            mask_paths = np.array(target_img_paths)[random_indices].tolist()
+        else:
+            img_paths = input_img_paths.copy()
+            mask_paths = target_img_paths.copy()
+
+    return img_paths, mask_paths
 
 
 def load_custom_model(model_path, custom_objects_list):

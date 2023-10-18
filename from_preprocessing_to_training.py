@@ -1,4 +1,4 @@
-from utils import get_random_indices, get_training_file_paths, gray_svd_decomposition
+from utils import get_random_indices, get_file_paths, gray_svd_decomposition
 
 import tensorflow as tf 
 from tensorflow import keras
@@ -263,7 +263,7 @@ class LoadPreprocessImages:
         else:
             img_chan = 1
 
-        img_list, gt_list = get_training_file_paths()
+        img_list, gt_list = get_file_paths()
 
         if max_samples:
             random_indices = get_random_indices(range(len(img_list)), max_samples)

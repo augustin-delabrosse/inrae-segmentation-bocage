@@ -1,5 +1,9 @@
 import pandas as pd
+import geopandas as gpd
 import numpy as np
+import rasterio
+from rasterio.features import geometry_mask
+import skimage.transform as st
 
 from PIL import Image
 import os
@@ -49,7 +53,7 @@ def convolution(im, N):
     return s
 
 
-def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
+def vignette_and_mask_creation_func(path_to_orthophoto_rgb, gdf):
     """
     Create and save vignettes and masks from the RGB and IRC orthophotos.
 
@@ -74,11 +78,23 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
     mnhc_dir_dept = config['mnhc_path']+dept+'_'+year+'/'
     
     # Open and resize IRC and RGB images
-    ortho_rgb = cv2.resize(np.asarray(Image.open(path_to_orthophoto_rgb)), (10000, 10000), interpolation=cv2.INTER_AREA)
-    ortho_irc = cv2.resize(np.asarray(Image.open(path_to_orthophoto_irc)), (10000, 10000), interpolation=cv2.INTER_AREA) 
-    ndvi = np.divide(ortho_irc[:,:,0]-ortho_irc[:,:,1],ortho_irc[:,:,0]+ortho_irc[:,:,1], where=(ortho_irc[:,:,0]+ortho_irc[:,:,1])!=0 )
-    ortho_irc = None 
+    ortho_rgb = np.asarray(Image.open(path_to_orthophoto_rgb))
+    ortho_irc = np.asarray(Image.open(path_to_orthophoto_irc))
     
+    with rasterio.open(path_to_orthophoto_rgb) as src:
+        # aerial_image = src.read()
+        aerial_transform = src.transform
+    
+    # Create a mask with the same dimensions as the orthophoto
+    buildings = geometry_mask(gdf.geometry, transform=aerial_transform, invert=True, out_shape=ortho_rgb.shape[:-1])
+    
+    ortho_rgb = cv2.resize(ortho_rgb, (10000, 10000), interpolation=cv2.INTER_AREA)
+    ortho_irc = cv2.resize(ortho_irc, (10000, 10000), interpolation=cv2.INTER_AREA) 
+    ndvi = np.divide(ortho_irc[:,:,0]-ortho_irc[:,:,1],ortho_irc[:,:,0]+ortho_irc[:,:,1], where=(ortho_irc[:,:,0]+ortho_irc[:,:,1])!=0)
+    ortho_irc = None 
+    buildings = st.resize(buildings.astype(int), (10000, 10000), order=0, preserve_range=True, anti_aliasing=False)
+    
+
     # Create output directories if they don't exist
     if not os.path.exists(config['rgb_vignettes_path'] + f'{dept}/' + f'rgb_{rgb_x}_{rgb_y}/'):
         os.makedirs(config['rgb_vignettes_path'] + f'{dept}/' + f'rgb_{rgb_x}_{rgb_y}/')
@@ -108,15 +124,19 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
                                                          np.logical_or(mnhc > 5., 
                                                                        std_conv_mnhc > .5)
                                                         ),
-                                          ndvi[mnhc_x*w:(mnhc_x+1)*w, mnhc_y*h:(mnhc_y+1)*h] > 0) \
-                    .astype('uint8')
+                                          np.logical_and(ndvi[mnhc_x*w:(mnhc_x+1)*w, mnhc_y*h:(mnhc_y+1)*h] > 0,
+                                                         buildings[mnhc_x*w:(mnhc_x+1)*w, mnhc_y*h:(mnhc_y+1)*h] == 0
+                                                        ) \
+                                         ).astype('uint8')
                 else:
                     mask = np.logical_and(np.logical_and(mnhc > 3., 
                                                          np.logical_or(mnhc > 5., 
                                                                        std_conv_mnhc > .5)
                                                         ),
-                                          ndvi[mnhc_y*h:(mnhc_y+1)*h, mnhc_x*w:(mnhc_x+1)*w] > 0) \
-                    .astype('uint8')
+                                          np.logical_and(ndvi[mnhc_y*h:(mnhc_y+1)*h, mnhc_x*w:(mnhc_x+1)*w] > 0,
+                                                         buildings[mnhc_y*h:(mnhc_y+1)*h, mnhc_x*w:(mnhc_x+1)*w] == 0
+                                                        ) \
+                                         ).astype('uint8')
                 # mnhc_y*h:(mnhc_y+1)*h, mnhc_x*w:(mnhc_x+1)*w
                 
                 for x in range(0, w-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
@@ -157,7 +177,6 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb):
     df.drop_duplicates(subset='file').to_csv(config['stat_vignettes_path'])
     
     return df
-
 
 def vignette_creation_func(path_to_orthophoto_rgb, w=2000, h=2000):
     """
