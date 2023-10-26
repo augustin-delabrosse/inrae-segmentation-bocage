@@ -46,6 +46,17 @@ def std_convoluted(im, N):
     return np.sqrt((s2 - s**2 / ns) / ns)
 
 def convolution(im, N):
+    """
+    Apply a simple convolution operation to an input image 
+    using a square kernel of size (2N+1)x(2N+1).
+
+    Args:
+    im (numpy.ndarray): The input image as a numpy array.
+    N (int): The size parameter used to define the kernel.
+
+    Returns:
+    numpy.ndarray: The convolved image.
+    """
     # Calculate squared image and initialize kernel
     kernel = np.ones((2*N+1, 2*N+1))
     # Convolve the image and squared image with the kernel
@@ -180,14 +191,23 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb, gdf):
 
 def vignette_creation_func(path_to_orthophoto_rgb, w=2000, h=2000):
     """
-    Create and save vignettes and masks from the RGB and IRC orthophotos.
+    Generate multiple vignettes from an orthophoto in RGB format and save them. 
+    The function also calculates various characteristics of the
+    vignettes and stores them in a DataFrame.
 
-    Parameters:
-    - path_to_orthophoto_rgb (str): Path to the orthophoto RGB image.
+    Args:
+    path_to_orthophoto_rgb (str): The file path to the RGB orthophoto.
+    w (int): Width of each vignette.
+    h (int): Height of each vignette.
 
     Returns:
-    - pd.DataFrame: DataFrame containing stats about the vignettes.
+    pd.DataFrame: A DataFrame containing characteristics of generated vignettes.
+
+    
+
+    The function follows a specific directory structure for storing vignettes and related data.
     """
+    
     Image.MAX_IMAGE_PIXELS = None
     
     rgb_name = os.path.basename(path_to_orthophoto_rgb)

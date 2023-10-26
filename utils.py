@@ -111,47 +111,80 @@ def get_random_indices(input_list, n):
     return random_indices
 
 def get_training_files_paths(input_img_paths, target_img_paths, max_samples, divide_by_dept=True):
+    """
+    Get training file paths for input and target images. If 'divide_by_dept'
+    is True, the function returns an equal number of file paths for each 
+    administrative department, ensuring a balanced distribution. 
+    If 'max_samples' is set, it limits the number of samples retrieved.
+
+    Args:
+    input_img_paths (dict or list): A dictionary mapping department keys to lists of input image file paths,
+                                    or a list of input image file paths.
+    target_img_paths (dict or list): A dictionary mapping department keys to lists of target image file paths,
+                                     or a list of target image file paths.
+    max_samples (int): The maximum number of samples to retrieve.
+    divide_by_dept (bool): If True, divide samples by department; otherwise, combine all samples.
+
+    Returns:
+    tuple: A tuple containing two lists, the first for input image file paths and the second for target image file paths
+    """
+
     if divide_by_dept:
         if max_samples:
             img_paths = np.array([])
             mask_paths = np.array([])
-            
             total_added_samples = 0
-            
+
             for idx, dept in enumerate(input_img_paths.keys()):
-                # print(max_samples-total_added_samples, len(input_img_paths.keys())-idx)
-                
-                n_samples = (max_samples-total_added_samples)/(len(input_img_paths.keys())-idx)
-                
+                # Calculate the number of samples to add per department
+                n_samples = (max_samples - total_added_samples) / (len(input_img_paths.keys()) - idx)
                 max = len(input_img_paths[dept])
-            
+
+                # Calculate the number of added samples for this department
                 added_samples = int(np.min([n_samples, max]))
                 total_added_samples += added_samples
-                
+
+                # Get random indices for selecting samples
                 random_indices = get_random_indices(range(added_samples), added_samples)
                 random_indices.sort()
-            
+
                 img_paths = np.append(img_paths, np.array(input_img_paths[dept])[random_indices])
                 mask_paths = np.append(mask_paths, np.array(target_img_paths[dept])[random_indices])
-            
-                # print(dept, max, n_samples, added_samples)
         else:
+            # Combine all input and target image paths
             img_paths = sorted({x for v in input_img_paths.values() for x in v})
             mask_paths = sorted({x for v in target_img_paths.values() for x in v})
-    else :
+    else:
         if max_samples:
+            # Randomly select samples when not dividing by department
             random_indices = get_random_indices(range(len(input_img_paths)), max_samples)
             random_indices.sort()
             img_paths = np.array(input_img_paths)[random_indices].tolist()
             mask_paths = np.array(target_img_paths)[random_indices].tolist()
         else:
+            # Copy input and target image paths as is
             img_paths = input_img_paths.copy()
             mask_paths = target_img_paths.copy()
 
     return img_paths, mask_paths
 
 
+
 def load_custom_model(model_path, custom_objects_list):
+    """
+    Load a custom model from a file with the provided custom objects.
+
+    Args:
+    model_path (str): The file path to the saved model.
+    custom_objects_list (list): A list of custom objects used in the model.
+
+    Returns:
+    tf.keras.Model: The loaded model with custom objects.
+
+    This function loads a custom model from a file and ensures that the custom objects used in the model are correctly
+    loaded by creating a dictionary mapping the custom object names to the objects themselves. It then loads the model
+    using TensorFlow's 'tf.keras.models.load_model' method with the custom objects dictionary.
+    """
     custom_objects_dict = {}
     for i in custom_objects_list:
         if 'function ' in str(i):
@@ -165,7 +198,18 @@ def load_custom_model(model_path, custom_objects_list):
     return loaded_model
 
 def estimate_noise(img):
+    """
+    Estimate the noise level in an image using a simple algorithm inspired by John Immerkær's paper "Fast Noise Variance Estimation."
+    It calculates the noise by applying a convolution operation to the image with a
+    specific 3x3 filter and then computing the noise level based on the resulting values.
+    
+    Args:
+    img (numpy.ndarray): Input image for which noise level needs to be estimated.
 
+    Returns:
+    float: Estimated noise level. 
+    """
+    
     H, W = img.shape
 
     M = [[1, -2, 1],
@@ -206,50 +250,88 @@ def estimate_noise(img):
 #     return interpolated_preds
 
 def gray_svd_decomposition(img, k):
-    img           = Image.fromarray(img)
-    img_mat       = np.array(list(img.getdata(band=0)), float)
-    img_mat.shape = (img.size[1], img.size[0])
-    img_mat       = np.matrix(img_mat)
+    """
+    Perform Singular Value Decomposition (SVD) on a grayscale image and reconstruct it 
+    by performing Singular Value Decomposition (SVD) using the top 'k' singular values.
+
+    Args:
+    img (numpy.ndarray): Grayscale image as a NumPy array.
+    k (int): The number of singular values to retain for reconstruction.
+
+    Returns:
+    numpy.ndarray: Reconstructed grayscale image.
+    """
+    # Convert the NumPy array to a PIL Image
+    img = Image.fromarray(img)
     
+    # Convert the image data to a NumPy matrix
+    img_mat = np.array(list(img.getdata(band=0), dtype=float))
+    img_mat.shape = (img.size[1], img.size[0])
+    img_mat = np.matrix(img_mat)
     
     # Perform Singular Value Decomposition
     U, sigma, V = np.linalg.svd(img_mat)
     
-    # Image reconstruction
+    # Reconstruct the image using the top 'k' singular values
     reconstimg = np.matrix(U[:, :k]) * np.diag(sigma[:k]) * np.matrix(V[:k, :])
+    
     return reconstimg
 
 
+import numpy as np
+
 def svd_compressor(image, k):
-    """Returns the compressed image channel at the specified order"""
-    
-    # Create an array filled with zeros having the shape of the image
+    """
+    Compress a 1D image using Singular Value Decomposition (SVD) by retaining only the top 'k' singular values.
+
+    Args:
+    image (numpy.ndarray): Input 1D image as a NumPy array.
+    k (int): The number of singular values to retain for compression.
+
+    Returns:
+    numpy.ndarray: Compressed image.
+    """
+    # Create an array filled with zeros having the shape of the input image
     compressed = np.zeros(image.shape)
     
-    # Get the U, S and V terms (S = SIGMA)
+    # Get the U, S, and V terms (S = SIGMA)
     U, S, V = np.linalg.svd(image)
     
-    # Loop over U columns (Ui), S diagonal terms (Si) and V rows (Vi) until the chosen order
+    # Loop over U columns (Ui), S diagonal terms (Si), and V rows (Vi) until the chosen order
     for i in range(k):
         Ui = U[:, i].reshape(-1, 1)
         Vi = V[i, :].reshape(1, -1)
         Si = S[i]
-        compressed += (Ui * Si * Vi)
+        compressed += Ui * Si * Vi
     
     return compressed
 
 def rgb_svd_decomposition(image, k):
+    """
+    Perform RGB image decomposition using Singular Value Decomposition (SVD) on each color channel.
 
+    Args:
+    image (numpy.ndarray): Input RGB image as a NumPy array.
+    k (int): The number of singular values to retain for decomposition.
+
+    Returns:
+    numpy.ndarray: Reconstructed RGB image.
+
+    This function separates an RGB image into its red, green, and blue color channels. It then applies the 'svd_compressor'
+    function to each color channel, retaining only the top 'k' singular values. Finally, it combines the compressed color
+    channels to reconstruct the RGB image.
+    """
     # Separation of the image channels
     red_image = np.array(image)[:, :, 0]
     green_image = np.array(image)[:, :, 1]
     blue_image = np.array(image)[:, :, 2]
 
+    # Compress each color channel using SVD
     red_comp = svd_compressor(red_image, k)
     green_comp = svd_compressor(green_image, k)
     blue_comp = svd_compressor(blue_image, k)
 
-    # Combine images
+    # Combine the compressed color channels
     color_comp = np.zeros((np.array(image).shape[0], np.array(image).shape[1], 3))
     color_comp[:, :, 0] = red_comp
     color_comp[:, :, 1] = green_comp
