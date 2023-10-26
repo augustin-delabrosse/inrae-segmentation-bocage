@@ -164,7 +164,6 @@ def load_custom_model(model_path, custom_objects_list):
     )
     return loaded_model
 
-
 def estimate_noise(img):
 
     H, W = img.shape
