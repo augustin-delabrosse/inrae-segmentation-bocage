@@ -1,4 +1,4 @@
-from utils import get_random_indices, get_file_paths, gray_svd_decomposition
+from utils import get_random_indices, get_file_paths, gray_svd_decomposition, rgb_svd_decomposition
 
 import tensorflow as tf 
 from tensorflow import keras
@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import random
 import cv2 
 from skimage import color
+from skimage.restoration import denoise_wavelet
 # from PIL import Image
 
 import warnings
@@ -373,7 +374,13 @@ class orthosSequence(keras.utils.Sequence):
             if not self.rgb:
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
             if self.add_noise:
-                img = gray_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
+                if self.rgb:
+                    img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
+                                rescale_sigma=True)
+                    # img = rgb_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
+                else:
+                    img = denoise_wavelet(img, rescale_sigma=True)
+                    # img = gray_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
                 # gaussian = np.round(np.random.normal(0, self.std_noise, (img.shape)))
                 # img = img + gaussian
                 # img = (img + self.noise * img.std() * np.random.random(img.shape)).astype(np.uint8)

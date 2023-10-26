@@ -13,9 +13,6 @@ from torch.nn.functional import interpolate
 
 from keras import backend as K
 
-from glob import glob
-import itertools
-
 def get_file_paths(divide_by_dept=False):
     """
     Get file paths for RGB images and mask images.
@@ -170,44 +167,44 @@ def load_custom_model(model_path, custom_objects_list):
 
 def estimate_noise(img):
 
-  H, W = img.shape
+    H, W = img.shape
 
-  M = [[1, -2, 1],
+    M = [[1, -2, 1],
        [-2, 4, -2],
        [1, -2, 1]]
 
-  sigma = np.sum(np.sum(np.absolute(convolve2d(img, M))))
-  sigma = sigma * math.sqrt(0.5 * math.pi) / (6 * (W-2) * (H-2))
+    sigma = np.sum(np.sum(np.absolute(convolve2d(img, M))))
+    sigma = sigma * math.sqrt(0.5 * math.pi) / (6 * (W-2) * (H-2))
 
-  return sigma
+    return sigma
 
 
-def interpolate_segformer_outputs(preds, output_size: tuple=(256, 256)):
-    """
-    Bilinear nterpolate segmentation model outputs from a TensorFlow tensor to a PyTorch tensor with a specified output size. 
-    The resulting tensor will have a shape of (None, height, width, 1) and can be used for further processing or visualization.
+# def interpolate_segformer_outputs(preds, output_size: tuple=(256, 256)):
+#     """
+#     Bilinear nterpolate segmentation model outputs from a TensorFlow tensor to a PyTorch tensor with a specified output size. 
+#     The resulting tensor will have a shape of (None, height, width, 1) and can be used for further processing or visualization.
 
-    Args:
-        preds (Tensor): A TensorFlow tensor containing segmentation model predictions with shape (None, None, None, 1).
-        output_size (tuple, optional): The desired output size of the interpolated tensor in the format (height, width).
-            Default is (256, 256).
+#     Args:
+#         preds (Tensor): A TensorFlow tensor containing segmentation model predictions with shape (None, None, None, 1).
+#         output_size (tuple, optional): The desired output size of the interpolated tensor in the format (height, width).
+#             Default is (256, 256).
+# 
+#     Returns:
+#         Tensor: A PyTorch tensor containing the interpolated segmentation model predictions with shape (None, height, width, 1).
 
-    Returns:
-        Tensor: A PyTorch tensor containing the interpolated segmentation model predictions with shape (None, height, width, 1).
-
-    Example:
-        # Resize TensorFlow segmentation model outputs to (256, 256) using bilinear interpolation
-        interpolated_preds = interpolate_segformer_outputs(preds, output_size=(256, 256))
-    """
-    pytorch_preds = torch.from_numpy(preds.numpy()).float()
+#     Example:
+#         # Resize TensorFlow segmentation model outputs to (256, 256) using bilinear interpolation
+#         interpolated_preds = interpolate_segformer_outputs(preds, output_size=(256, 256))
+#     """
+#     pytorch_preds = torch.from_numpy(preds.numpy()).float()
     
     # Perform interpolation with the correct dimension order and mode
-    interpolated_preds = interpolate(pytorch_preds.permute(0, 3, 1, 2), size=output_size, mode='bilinear', align_corners=False)
+#     interpolated_preds = interpolate(pytorch_preds.permute(0, 3, 1, 2), size=output_size, mode='bilinear', align_corners=False)
     
     # Permute dimensions to get the desired shape (1, 256, 256, 1)
-    interpolated_preds = interpolated_preds.permute(0, 2, 3, 1)
+#     interpolated_preds = interpolated_preds.permute(0, 2, 3, 1)
 
-    return interpolated_preds
+#     return interpolated_preds
 
 def gray_svd_decomposition(img, k):
     img           = Image.fromarray(img)
@@ -222,3 +219,42 @@ def gray_svd_decomposition(img, k):
     # Image reconstruction
     reconstimg = np.matrix(U[:, :k]) * np.diag(sigma[:k]) * np.matrix(V[:k, :])
     return reconstimg
+
+
+def svd_compressor(image, k):
+    """Returns the compressed image channel at the specified order"""
+    
+    # Create an array filled with zeros having the shape of the image
+    compressed = np.zeros(image.shape)
+    
+    # Get the U, S and V terms (S = SIGMA)
+    U, S, V = np.linalg.svd(image)
+    
+    # Loop over U columns (Ui), S diagonal terms (Si) and V rows (Vi) until the chosen order
+    for i in range(k):
+        Ui = U[:, i].reshape(-1, 1)
+        Vi = V[i, :].reshape(1, -1)
+        Si = S[i]
+        compressed += (Ui * Si * Vi)
+    
+    return compressed
+
+def rgb_svd_decomposition(image, k):
+
+    # Separation of the image channels
+    red_image = np.array(image)[:, :, 0]
+    green_image = np.array(image)[:, :, 1]
+    blue_image = np.array(image)[:, :, 2]
+
+    red_comp = svd_compressor(red_image, k)
+    green_comp = svd_compressor(green_image, k)
+    blue_comp = svd_compressor(blue_image, k)
+
+    # Combine images
+    color_comp = np.zeros((np.array(image).shape[0], np.array(image).shape[1], 3))
+    color_comp[:, :, 0] = red_comp
+    color_comp[:, :, 1] = green_comp
+    color_comp[:, :, 2] = blue_comp
+    color_comp = np.around(color_comp).astype(int)
+    
+    return color_comp
