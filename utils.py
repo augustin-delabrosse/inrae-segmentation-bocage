@@ -6,12 +6,12 @@ import random
 from glob import glob
 from PIL import Image
 import itertools
-import tensorflow as tf
+# import tensorflow as tf
 from tensorflow import keras
-import torch
-from torch.nn.functional import interpolate
+# import torch
+# from torch.nn.functional import interpolate
 
-from keras import backend as K
+# from keras import backend as K
 
 def get_file_paths(divide_by_dept=False):
     """
