@@ -1,20 +1,40 @@
-# import tensorflow as tf 
+from utils import get_random_indices, get_file_paths, gray_svd_decomposition
+
+import tensorflow as tf 
 from tensorflow import keras
 from keras.models import Model
 from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, Conv2DTranspose
 from keras.layers import Activation, add, multiply, Lambda
 from keras.layers import UpSampling2D, Dropout, BatchNormalization
+from keras.optimizers import Adam, SGD, RMSprop
 from keras.initializers import glorot_normal
+from keras.layers import AveragePooling2D
+from tensorflow.keras.preprocessing.image import load_img
+from sklearn.model_selection import train_test_split
 
 from keras import backend as K
+
+
+import json
+from tqdm import tqdm
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+import cv2 
+from skimage import color
+# from PIL import Image
 
 import warnings
 warnings.simplefilter("ignore")
 
+with open('config.json') as f_in:
+    config = json.load(f_in)
+
 K.set_image_data_format('channels_last')  # Set the data format to 'channels_last' (TensorFlow dimension ordering)
 
+
 class AttentionUnet:
-    def __init__(self, input_size=(256, 256, 3)):
+    def __init__(self, input_size):
         self.input_size = input_size
         # Define weight initialization method
         self.kinit = 'glorot_normal'
@@ -53,7 +73,7 @@ class AttentionUnet:
         upsample_psi = UpSampling2D(size=(shape_x[1] // shape_sigmoid[1], shape_x[2] // shape_sigmoid[2]))(sigmoid_xg)  # 32
 
         # Expand attention coefficients to match the number of channels in 'x'
-        upsample_psi = self.expend_as(upsample_psi, shape_x[3],  name) # Lambda(lambda x, repnum: K.repeat_elements(x, repnum, axis=3), arguments={'repnum': shape_x[3]}, name='psi_up'+name)(upsample_psi)# 
+        upsample_psi = self.expend_as(upsample_psi, shape_x[3],  name)
         # Multiply attention coefficients and 'x' to obtain attended feature map
         y = multiply([upsample_psi, x], name='q_attn'+name)
 
@@ -174,20 +194,6 @@ class Losses:
 
     @staticmethod
     def tversky(y_true, y_pred, alpha=0.7, smooth=1e-6):
-        """
-        Calculate the Tversky loss for binary segmentation tasks.
-
-        This function computes the Tversky loss, a generalization of the Dice loss, with user-defined parameters.
-
-        Parameters:
-        - y_true (tensor): True binary labels (ground truth).
-        - y_pred (tensor): Predicted binary labels.
-        - alpha (float): Tversky index parameter.
-        - smooth (float): Smoothing factor to prevent division by zero.
-
-        Returns:
-        - tensor: Tversky loss value.
-        """
         y_true_pos = K.flatten(y_true)
         y_pred_pos = K.flatten(y_pred)
         true_pos = K.sum(y_true_pos * y_pred_pos)
@@ -197,40 +203,11 @@ class Losses:
 
     @staticmethod
     def focal_tversky(y_true, y_pred, gamma=1.33, smooth=1e-6):
-        """
-        Calculate the Focal Tversky loss for binary segmentation tasks.
-
-        This function computes the Focal Tversky loss, which is a variant of the Tversky loss with a focal parameter.
-
-        Parameters:
-        - y_true (tensor): True binary labels (ground truth).
-        - y_pred (tensor): Predicted binary labels.
-        - gamma (float): Focal parameter.
-        - smooth (float): Smoothing factor to prevent division by zero.
-
-        Returns:
-        - tensor: Focal Tversky loss value.
-        """
         pt_1 = Losses.tversky(y_true, y_pred, smooth=smooth)
         return K.pow((1 - pt_1), gamma)
 
     @staticmethod
     def Combo_loss(y_true, y_pred, ce_w=0.5, ce_d_w=0.5, smooth=1):
-        """
-        Calculate the Combo loss for binary segmentation tasks.
-
-        This function computes the Combo loss, which combines Binary Cross-Entropy (BCE) and Dice losses with user-defined weights.
-
-        Parameters:
-        - y_true (tensor): True binary labels (ground truth).
-        - y_pred (tensor): Predicted binary labels.
-        - ce_w (float): Weight for BCE loss.
-        - ce_d_w (float): Weight for Dice loss.
-        - smooth (float): Smoothing factor to prevent division by zero.
-
-        Returns:
-        - tensor: Combo loss value.
-        """
         e = K.epsilon()
         y_true_f = K.flatten(y_true)
         y_pred_f = K.flatten(y_pred)
@@ -242,3 +219,172 @@ class Losses:
         combo = (ce_d_w * weighted_ce) - ((1 - ce_d_w) * d)
         return combo
 
+
+class LoadPreprocessImages:
+    @staticmethod
+    def equalize_histogram(image, convert_to_tensors=True):
+        """
+        Apply histogram equalization to an RGB image.
+
+        Parameters:
+        - image (tf.Tensor): Input RGB image.
+
+        Returns:
+        - tf.Tensor: Image after histogram equalization.
+        """
+        # Convert RGB to YUV
+        image_yuv = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
+        # Apply histogram equalization to the Y channel
+        image_yuv[:,:,0] = cv2.equalizeHist(image_yuv[:,:,0])
+        # Convert YUV back to RGB
+        image_output = cv2.cvtColor(image_yuv, cv2.COLOR_YUV2RGB)
+
+        if convert_to_tensors:
+            # Convert back to tensor
+            image_output = tf.convert_to_tensor(image_output, dtype=tf.float32)
+        return image_output
+
+    @staticmethod
+    def adap_hist_equalize(img):
+        # histogram equalization
+        equalized_image = cv2.equalizeHist(img)
+        # Adaptive histogram equalization is supposed to be more robust
+        # CLAHE = Contrast Limited Adaptive Histogram Equalization
+        # Create a CLAHE object
+        clahe = cv2.createCLAHE(clipLimit=3, tileGridSize=(8, 8))
+        # Apply CLAHE to the image
+        adap_equalized_image = clahe.apply(equalized_image)
+        return adap_equalized_image
+
+    @staticmethod
+    def load_preprocess_images(rgb, equalize, add_noise, std_noise=7, max_samples=None, img_row=256, img_col=256, gt_chan=1, test_split=0.2, shuffle=True):
+        if rgb:
+            img_chan = 3
+        else:
+            img_chan = 1
+
+        img_list, gt_list = get_file_paths()
+
+        if max_samples:
+            random_indices = get_random_indices(range(len(img_list)), max_samples)
+            random_indices.sort()
+            img_list = np.array(img_list)[random_indices].tolist()
+            gt_list = np.array(gt_list)[random_indices].tolist()
+
+        num_imgs = len(img_list)
+
+        if rgb:
+            imgs = np.zeros((num_imgs, img_row, img_col, 3))
+        else:
+            imgs = np.zeros((num_imgs, img_row, img_col))
+        gts = np.zeros((num_imgs, img_row, img_col))
+
+        for i in tqdm(range(num_imgs)):
+            tmp_img = plt.imread(img_list[i])
+            tmp_gt = plt.imread(gt_list[i])
+
+            img = cv2.resize(tmp_img, (img_col, img_row), interpolation=cv2.INTER_NEAREST)
+            gt = cv2.resize(tmp_gt, (img_col, img_row), interpolation=cv2.INTER_NEAREST)
+
+            if rgb:
+                if equalize:
+                    img = LoadPreprocessImages.equalize_histogram(img, convert_to_tensors=False)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                if equalize:
+                    img = LoadPreprocessImages.adap_hist_equalize(img)
+
+            
+            if add_noise:
+                gaussian = np.round(np.random.normal(0, std_noise, (img.shape)))
+                img = img + gaussian
+                # img = (img + noise * img.std() * np.random.random(img.shape)).astype(np.uint8)
+                
+            
+
+            if img.max() > 1:
+                img = img / 255.
+            if gt.max() > 1:
+                gt = gt / 255.
+            
+            imgs[i] = img # np.stack([img]*3, axis=2)# img
+            gts[i] = gt
+
+        indices = np.arange(0, num_imgs, 1)
+
+        imgs_train, imgs_test, \
+        imgs_mask_train, imgs_mask_test, \
+        trainIdx, testIdx = train_test_split(imgs, gts, indices, test_size=test_split, shuffle=shuffle)
+
+        if not rgb:
+            imgs_train = np.expand_dims(imgs_train, axis=3)
+            imgs_test = np.expand_dims(imgs_test, axis=3)
+
+        imgs_mask_train = np.expand_dims(imgs_mask_train, axis=3)
+        imgs_mask_test = np.expand_dims(imgs_mask_test, axis=3)
+
+        return imgs_train, imgs_mask_train, imgs_test, imgs_mask_test
+
+
+class orthosSequence(keras.utils.Sequence):
+    """Helper to iterate over the data (as Numpy arrays)."""
+
+    def __init__(self, batch_size, input_img_paths, target_img_paths, rgb, add_noise, std_noise=7, segformer=False, img_size=(256, 256), smooth = 0):
+        
+        self.batch_size = batch_size
+        self.img_size = img_size
+        self.input_img_paths = input_img_paths
+        self.target_img_paths = target_img_paths
+        self.smooth = smooth
+        self.rgb = rgb
+        self.add_noise = add_noise
+        self.std_noise = std_noise
+        self.img_size = img_size
+        self.segformer = segformer
+
+    def __len__(self):
+        return len(self.target_img_paths) // self.batch_size
+
+    def __getitem__(self, idx):
+        """Returns tuple (input, target) correspond to batch #idx."""
+        i = idx * self.batch_size
+        batch_input_img_paths = self.input_img_paths[i : i + self.batch_size]
+        batch_target_img_paths = self.target_img_paths[i : i + self.batch_size]
+
+        # print(batch_input_img_paths)
+        # print(batch_target_img_paths)
+        if self.rgb:
+            x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
+        else:
+            if self.segformer:
+                x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
+            else:
+                x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        # print(x.shape, y.shape)
+        for j in range(len(batch_input_img_paths)):
+            img_path = batch_input_img_paths[j]
+            mask_path = batch_target_img_paths[j]
+
+            # print(img_path + ' I ' + mask_path)
+            
+            img = load_img(img_path, target_size=self.img_size)
+            img = np.asarray(img)
+            if not self.rgb:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            if self.add_noise:
+                img = gray_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
+                # gaussian = np.round(np.random.normal(0, self.std_noise, (img.shape)))
+                # img = img + gaussian
+                # img = (img + self.noise * img.std() * np.random.random(img.shape)).astype(np.uint8)
+            if img.max() > 1:
+                img = img/255.
+            x[j] = img if self.rgb else (np.stack([img]*3, axis=2) if self.segformer else np.expand_dims(img, 2))#gaussian_filter(img, sigma=(self.smooth,self.smooth,0))
+        
+            mask = load_img(mask_path, target_size=self.img_size, color_mode="grayscale")
+            mask = np.asarray(mask)
+            if mask.max() > 1:
+                mask = mask/255.
+            y[j] = np.expand_dims(mask, 2)
+            
+        return x, y

@@ -189,37 +189,39 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb, gdf):
     
     return df
 
-def vignette_creation_func(path_to_orthophoto_rgb, w=2000, h=2000):
+def vignette_to_predict_creation_func(path_to_orthophoto_rgb, create_stats=False):
     """
-    Generate multiple vignettes from an orthophoto in RGB format and save them. 
-    The function also calculates various characteristics of the
-    vignettes and stores them in a DataFrame.
+    Create vignettes and optionally update statistics from an orthophoto.
 
     Args:
-    path_to_orthophoto_rgb (str): The file path to the RGB orthophoto.
-    w (int): Width of each vignette.
-    h (int): Height of each vignette.
+    path_to_orthophoto_rgb (str): Path to the RGB orthophoto.
+    create_stats (bool): Whether to create statistics (DataFrame) or not.
 
     Returns:
-    pd.DataFrame: A DataFrame containing characteristics of generated vignettes.
+    pd.DataFrame or None: If create_stats is True, returns the updated DataFrame; otherwise, returns None.
 
-    
-
-    The function follows a specific directory structure for storing vignettes and related data.
+    This function processes an RGB orthophoto and creates vignettes from it. It can also update statistics if create_stats is True.
     """
-    
     Image.MAX_IMAGE_PIXELS = None
-    
+
     rgb_name = os.path.basename(path_to_orthophoto_rgb)
     dept = rgb_name[:2]
     year = rgb_name[3:7]
-    
+
     # Extract coordinates from RGB orthophoto path
     rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos']: config['rgb_coordinates_pos']+3]
     rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos']+4: config['rgb_coordinates_pos']+8]
-    
+
     # Open and resize RGB images
-    ortho_rgb = cv2.resize(np.asarray(Image.open(path_to_orthophoto_rgb)), (10000, 10000), interpolation=cv2.INTER_AREA)
+    ortho_rgb = np.asarray(Image.open(path_to_orthophoto_rgb))
+    
+    ortho_rgb_shape = ortho_rgb.shape
+    
+    w = np.min([10000, ortho_rgb_shape[0]])
+    h = np.min([10000, ortho_rgb_shape[1]])
+    
+    if ortho_rgb_shape[0] > 10000 or ortho_rgb_shape[1] > 10000:
+        ortho_rgb = cv2.resize(ortho_rgb, (10000, 10000), interpolation=cv2.INTER_AREA)
     
     # Create output directories if they don't exist
     if not os.path.exists(config['rgb_older_vignettes_path'] + f'rgb_{year}/'):
@@ -227,41 +229,68 @@ def vignette_creation_func(path_to_orthophoto_rgb, w=2000, h=2000):
     if not os.path.exists(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/'):
         os.makedirs(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/')
 
-    # Read existing DataFrame or create a new one
-    if os.path.exists(config['stat_older_vignettes_path']):
-        df = pd.read_csv(config['stat_older_vignettes_path'], index_col="Unnamed: 0")
-    else:
-        df = pd.DataFrame(columns=config['stat_older_vignettes_col'])
 
-    for mnhc_x in tqdm(range(0,5)):
-        for mnhc_y in range(0,5):
+    if create_stats:
+        # Read existing DataFrame or create a new one
+        if os.path.exists(config['stat_older_vignettes_path']):
+            df = pd.read_csv(config['stat_older_vignettes_path'], index_col="Unnamed: 0")
+        else:
+            df = pd.DataFrame(columns=config['stat_older_vignettes_col'])
+
+    if os.path.exists(config['ortho_shapes_path'] + 'ortho_shapes.json'):
+        with open(config['ortho_shapes_path'] + 'ortho_shapes.json') as f:
+            ortho_shapes = json.load(f)
+    else:
+        ortho_shapes = {}
+
+    if os.path.exists(config['ortho_positions_path'] + 'ortho_positions.json'):
+        with open(config['ortho_positions_path'] + 'ortho_positions.json') as f:
+            ortho_positions = json.load(f)
+    else:
+        ortho_positions = {}
+    
+    shapes = {}
+    positions = {}
+
+    for x in range(0, w-(config['img_size'])+1, config['img_size']):
+        for y in range(0, h-(config['img_size'])+1, config['img_size']):
+
+            crop_rgb = ortho_rgb[np.max([0, y-config['border']]): y+config['img_size']+config['border'], np.max([0, x-config['border']]): x+config['img_size']+config['border'], :]
+            # ortho_rgb[np.max([0, mnhc_y*h+y-config['border']]): mnhc_y*h+y+config['img_size']+config['border'], np.max([0, mnhc_x*w+x-config['border']]): mnhc_x*w+x+config['img_size']+config['border'], :]
+
+            pos = dept+'_'+str(int(int(rgb_x)*1000+x/2))+'_'+str(int(int(rgb_y)*1000+y/2)) 
+            #  dept+'_'+str(int((int(rgb_x)+mnhc_x)*1000+x/2))+'_'+str(int((int(rgb_y)-mnhc_y)*1000+y/2))
+
+            cv2.imwrite(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/' + f'rgb_{year}_' + str(pos) + '.jpg', crop_rgb)
+
+            positions[pos] = tuple(np.array([np.max([0, y-config['border']]), y+config['img_size']+config['border'], np.max([0, x-config['border']]), x+config['img_size']+config['border']])/100)
+            shapes[pos] = crop_rgb.shape
             
-            for x in range(0, w-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
-                for y in range(0, h-(config['img_size']+config['border']*2)+1, config['img_size']+config['border']*2):
-                    
-                    crop_rgb = ortho_rgb[mnhc_y*h+y: mnhc_y*h+y+config['img_size']+config['border']*2, mnhc_x*w+x: mnhc_x*w+x+config['img_size']+config['border']*2, :]
-                    
-                    pos = dept+'_'+str(int((int(rgb_x)+mnhc_x)*1000+x/2))+'_'+str(int((int(rgb_y)-mnhc_y)*1000+y/2))
-                    
-                    cv2.imwrite(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/' + f'rgb_{year}_' + str(pos) + '.jpg', crop_rgb)
-                    
-                    # Calculate characteristics of the RGB crop and add to the DataFrame
-                    res = [year, pos, crop_rgb.sum()] + \
+            if create_stats:
+            # Calculate characteristics of the RGB crop and add to the DataFrame
+                res = [year, pos, crop_rgb.sum()] + \
                     np.mean(crop_rgb, axis=(0, 1)).tolist() + \
                     np.std(crop_rgb, axis=(0, 1)).tolist() + \
                     [np.mean(convolution(crop_rgb[:, :, 0], N=3)), np.mean(convolution(crop_rgb[:, :, 1], N=3)), np.mean(convolution(crop_rgb[:, :, 2], N=3))] + \
                     [np.std(convolution(crop_rgb[:, :, 0], N=3)), np.std(convolution(crop_rgb[:, :, 1], N=3)), np.std(convolution(crop_rgb[:, :, 2], N=3))] 
-                    # vignette_data.append(res)
-                    
-                    # Append the list to the DataFrame
-                    df.loc[len(df) + len(set(range(df.index[-1]))-set(df.index))
-                    if len(df.index) > 0
-                    else 0] = res
-            
-                # If more images are needed, comment the break
-                break
-                
-    # Drop duplicates and save the DataFrame to a CSV file
-    df.drop_duplicates(subset='file').to_csv(config['stat_older_vignettes_path'])
+
+                # Append the list to the DataFrame
+                df.loc[len(df) + len(set(range(df.index[-1]))-set(df.index))
+                if len(df.index) > 0
+                else 0] = res
+
+
+
+    ortho_shapes[rgb_name] = shapes
+    with open('vignettes/rgb_older/ortho_shapes.json', 'w') as f:
+        json.dump(ortho_shapes, f)
+
+    ortho_positions[rgb_name] = positions
+    with open('vignettes/rgb_older/ortho_positions.json', 'w') as f:
+        json.dump(ortho_positions, f)
     
-    return df
+    if create_stats:
+        # Drop duplicates and save the DataFrame to a CSV file
+        df.drop_duplicates(subset='file').to_csv(config['stat_older_vignettes_path'])
+
+        return df

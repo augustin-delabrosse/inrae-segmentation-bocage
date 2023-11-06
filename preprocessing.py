@@ -1,4 +1,4 @@
-from utils import get_random_indices, get_file_paths, gray_svd_decomposition, rgb_svd_decomposition
+from utils import get_random_indices, get_file_paths, gray_svd_decomposition, rgb_svd_decomposition# , hist_match
 
 import tensorflow as tf 
 from tensorflow import keras
@@ -133,7 +133,7 @@ class LoadPreprocessImages:
 class orthosSequence(keras.utils.Sequence):
     """Helper to iterate over the data (as Numpy arrays)."""
 
-    def __init__(self, batch_size, input_img_paths, target_img_paths, rgb, add_noise, std_noise=7, segformer=False, img_size=(256, 256), smooth = 0):
+    def __init__(self, batch_size, input_img_paths, target_img_paths, rgb, add_noise, std_noise=7, segformer=False, img_size=(256, 256), smooth=0):
         """
         This class is designed to help iterate over data stored as Numpy arrays for model training. It supports various
         options such as adding noise to the images, converting them to grayscale, and working with Segformer format.
@@ -160,6 +160,8 @@ class orthosSequence(keras.utils.Sequence):
 
         # print(batch_input_img_paths)
         # print(batch_target_img_paths)
+        
+        
         if self.rgb:
             x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
         else:
@@ -167,6 +169,7 @@ class orthosSequence(keras.utils.Sequence):
                 x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
             else:
                 x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+                # template = cv2.imread('donnees/BDORTHO/BDORTHO_2-0_RVB-0M50_JP2-E080_LAMB93_D035_2012-01-01/BDORTHO/1_DONNEES_LIVRAISON_2015-02-00365/BDO_RVB_0M50_JP2-E080_LAMB93_D35-2012/35-2012-0305-6780-LA93-0M50-E080.jp2')[:288, :288]
         y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
         # print(x.shape, y.shape)
         for j in range(len(batch_input_img_paths)):
@@ -185,7 +188,8 @@ class orthosSequence(keras.utils.Sequence):
                                 rescale_sigma=True)
                     # img = rgb_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
                 else:
-                    img = random_noise(img, mode='gaussian', var=0.001)
+                    # img = hist_match(img, template)
+                    img = random_noise(img, mode='gaussian', var=0.003)
                     # img = random_noise(img, mode='speckle')
                     # img = denoise_wavelet(img, rescale_sigma=True)
                     # img = gray_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
