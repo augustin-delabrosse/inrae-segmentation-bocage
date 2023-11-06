@@ -11,10 +11,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2 
 from skimage.restoration import denoise_wavelet
+from skimage.util import random_noise
 # from PIL import Image
 
 import warnings
 warnings.simplefilter("ignore")
+
+
+# from keras import backend as K
 
 # K.set_image_data_format('channels_last')  # Set the data format to 'channels_last' (TensorFlow dimension ordering)
 
@@ -181,7 +185,9 @@ class orthosSequence(keras.utils.Sequence):
                                 rescale_sigma=True)
                     # img = rgb_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
                 else:
-                    img = denoise_wavelet(img, rescale_sigma=True)
+                    img = random_noise(img, mode='gaussian', var=0.001)
+                    # img = random_noise(img, mode='speckle')
+                    # img = denoise_wavelet(img, rescale_sigma=True)
                     # img = gray_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
                 # gaussian = np.round(np.random.normal(0, self.std_noise, (img.shape)))
                 # img = img + gaussian

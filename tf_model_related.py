@@ -1,3 +1,4 @@
+import tensorflow as tf 
 from tensorflow import keras
 from keras.models import Model
 from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, Conv2DTranspose
@@ -11,7 +12,6 @@ import warnings
 warnings.simplefilter("ignore")
 
 K.set_image_data_format('channels_last')  # Set the data format to 'channels_last' (TensorFlow dimension ordering)
-
 
 class AttentionUnet:
     def __init__(self, input_size):
