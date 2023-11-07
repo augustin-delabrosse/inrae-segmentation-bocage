@@ -189,18 +189,22 @@ def vignette_and_mask_creation_func(path_to_orthophoto_rgb, gdf):
     
     return df
 
-def vignette_to_predict_creation_func(path_to_orthophoto_rgb, create_stats=False):
+def vignette_to_predict_creation(path_to_orthophoto_rgb, create_stats=False):
     """
-    Create vignettes and optionally update statistics from an orthophoto.
+    Create vignettes from an orthophoto and optionally update statistics.
 
     Args:
-    path_to_orthophoto_rgb (str): Path to the RGB orthophoto.
-    create_stats (bool): Whether to create statistics (DataFrame) or not.
+        path_to_orthophoto_rgb (str): Path to the RGB orthophoto.
+        create_stats (bool): Whether to create statistics.
 
     Returns:
-    pd.DataFrame or None: If create_stats is True, returns the updated DataFrame; otherwise, returns None.
+        tuple or None: If create_stats is True, returns ortho_positions, ortho_shapes, and df; otherwise, returns None.
 
     This function processes an RGB orthophoto and creates vignettes from it. It can also update statistics if create_stats is True.
+
+    :param path_to_orthophoto_rgb: Path to the RGB orthophoto.
+    :param create_stats: Whether to create statistics.
+    :return: If create_stats is True, returns ortho_positions, ortho_shapes, and df; otherwise, returns ortho_positions, ortho_shapes.
     """
     Image.MAX_IMAGE_PIXELS = None
 
@@ -293,4 +297,7 @@ def vignette_to_predict_creation_func(path_to_orthophoto_rgb, create_stats=False
         # Drop duplicates and save the DataFrame to a CSV file
         df.drop_duplicates(subset='file').to_csv(config['stat_older_vignettes_path'])
 
-        return df
+        return ortho_positions, ortho_shapes, df
+    
+    else:
+        return ortho_positions, ortho_shapes

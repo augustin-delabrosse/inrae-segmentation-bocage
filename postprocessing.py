@@ -3,7 +3,7 @@ import cv2
 
 import os
 
-import tqdm
+from tqdm import tqdm
 
 
 
@@ -21,17 +21,21 @@ def create_large_mask(list_of_paths, predictions, shapes, positions, shape_of_th
     Returns:
     numpy.ndarray: A large mask created by assembling smaller masks.
     """
+    
     mask = np.zeros(shape_of_the_large_mask)
 
     for idx, path in tqdm(enumerate(list_of_paths)):
+        
         geo_pos = os.path.basename(path)[9:-4]
 
         img_pos = positions[geo_pos]
         shape = shapes[geo_pos]
 
-        mask[img_pos[0]:img_pos[1], img_pos[2]: img_pos[3]] = cv2.resize(predictions[idx], 
-                                                                             (shape[1], shape[0]), 
-                                                                             interpolation=cv2.INTER_LINEAR)
+        mask[round(img_pos[0]*100):round(img_pos[1]*100), round(img_pos[2]*100): round(img_pos[3]*100)] = cv2.resize(predictions[idx], 
+                                                                                                             (shape[1], shape[0]), 
+                                                                                                             interpolation=cv2.INTER_LINEAR)
+        
+    return mask
         
     return mask
 
