@@ -10,7 +10,7 @@ from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2 
-from skimage.restoration import denoise_wavelet
+from skimage.restoration import denoise_wavelet, denoise_tv_bregman, denoise_tv_chambolle
 from skimage.util import random_noise
 # from PIL import Image
 
@@ -133,7 +133,7 @@ class LoadPreprocessImages:
 class orthosSequence(keras.utils.Sequence):
     """Helper to iterate over the data (as Numpy arrays)."""
 
-    def __init__(self, batch_size, input_img_paths, target_img_paths, rgb, add_noise, std_noise=7, segformer=False, img_size=(256, 256), smooth=0):
+    def __init__(self, batch_size, input_img_paths, target_img_paths, rgb, add_noise, year, std_noise=7, segformer=False, img_size=(256, 256)):
         """
         This class is designed to help iterate over data stored as Numpy arrays for model training. It supports various
         options such as adding noise to the images, converting them to grayscale, and working with Segformer format.
@@ -142,11 +142,11 @@ class orthosSequence(keras.utils.Sequence):
         self.img_size = img_size
         self.input_img_paths = input_img_paths
         self.target_img_paths = target_img_paths
-        self.smooth = smooth
         self.rgb = rgb
         self.add_noise = add_noise
         self.std_noise = std_noise
         self.img_size = img_size
+        self.year = year
         self.segformer = segformer
 
     def __len__(self):
@@ -179,17 +179,32 @@ class orthosSequence(keras.utils.Sequence):
             # print(img_path + ' I ' + mask_path)
             
             img = load_img(img_path, target_size=self.img_size)
-            img = np.asarray(img)
+            img = np.array(img)
+            # img[:,:,1] = np.clip(img[:,:,1] * 2, a_min=0, a_max=255)
             if not self.rgb:
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
             if self.add_noise:
                 if self.rgb:
-                    img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
+                    if self.year==2006:
+                        if j%4==1:
+                            img = cv2.GaussianBlur(img,(3, 3),cv2.BORDER_DEFAULT)
+                        elif j%4==2:
+                            img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
+                        elif j%4==3:
+                            img = denoise_wavelet(img, channel_axis=-1)
+                        else:
+                            img = img.copy()
+                        # img = denoise_tv_chambolle(img, channel_axis=-1)
+                        # img = denoise_tv_bregman(img, channel_axis=-1)
+                        # img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
+                        
+                    elif self.year==2012:
+                        img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
                                 rescale_sigma=True)
                     # img = rgb_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
                 else:
                     # img = hist_match(img, template)
-                    img = random_noise(img, mode='gaussian', var=0.003)
+                    img = random_noise(img, mode='gaussian', var=0.0015)
                     # img = random_noise(img, mode='speckle')
                     # img = denoise_wavelet(img, rescale_sigma=True)
                     # img = gray_svd_decomposition(img, k=int((1/5)*self.img_size[0]))
@@ -198,7 +213,7 @@ class orthosSequence(keras.utils.Sequence):
                 # img = (img + self.noise * img.std() * np.random.random(img.shape)).astype(np.uint8)
             if img.max() > 1:
                 img = img/255.
-            x[j] = img if self.rgb else (np.stack([img]*3, axis=2) if self.segformer else np.expand_dims(img, 2))#gaussian_filter(img, sigma=(self.smooth,self.smooth,0))
+            x[j] = img if self.rgb else (np.stack([img]*3, axis=2) if self.segformer else np.expand_dims(img, 2))
         
             mask = load_img(mask_path, target_size=self.img_size, color_mode="grayscale")
             mask = np.asarray(mask)

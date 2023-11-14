@@ -13,7 +13,7 @@ from tensorflow import keras
 
 # from keras import backend as K
 
-def get_file_paths(divide_by_dept=False):
+def get_file_paths(divide_by_dept=False, large=False):
     """
     Get file paths for RGB images and mask images.
 
@@ -21,44 +21,83 @@ def get_file_paths(divide_by_dept=False):
     - list: List of RGB image paths.
     - list: List of mask image paths.
     """
+    if large:
+        if divide_by_dept:
+            rgb_img_paths = {}
+            masks_img_paths = {}
+            depts = [i for i in list(os.walk(r'vignettes/rgb/'))[0][1] if not i.startswith('.') and i.endswith('large')]
+            
+            for i in depts:
+                rgb_img_paths[f'{i}'] = sorted(
+                    list(
+                        itertools.chain.from_iterable(
+                            [glob(i + "*.jpg") for i in glob(f"vignettes/rgb/{i}/*/", recursive=True)]
+                            )
+                        )
+                    )
 
-    if divide_by_dept:
-        rgb_img_paths = {}
-        masks_img_paths = {}
-        depts = [i for i in list(os.walk(r'vignettes/rgb/'))[0][1] if not i.startswith('.')]
-        for i in depts:
-            rgb_img_paths[f'{i}'] = sorted(
-                list(
-                    itertools.chain.from_iterable(
-                        [glob(i + "*.jpg") for i in glob(f"vignettes/rgb/{i}/*/", recursive=True)]
+                masks_img_paths[f'{i}'] = sorted(
+                    list(
+                        itertools.chain.from_iterable(
+                            [glob(i + "*.png") for i in glob(f"vignettes/mask/{i}/*/", recursive=True)]
+                            )
                         )
                     )
-                )
-                                
-            masks_img_paths[f'{i}'] = sorted(
+
+        else:
+            rgb_img_paths = sorted(
                 list(
                     itertools.chain.from_iterable(
-                        [glob(i + "*.png") for i in glob(f"vignettes/mask/{i}/*/", recursive=True)]
-                        )
+                        [glob(i + "*.jpg") for i in glob("vignettes/rgb/*_large/*/", recursive=True)]
                     )
                 )
-                                
+            )
+            masks_img_paths = sorted(
+                list(
+                    itertools.chain.from_iterable(
+                        [glob(i + "*.png") for i in glob("vignettes/mask/*_large/*/", recursive=True)]
+                    )
+                )
+            )
     else:
-        rgb_img_paths = sorted(
-            list(
-                itertools.chain.from_iterable(
-                    [glob(i + "*.jpg") for i in glob("vignettes/rgb/*/*/", recursive=True)]
-                )
-            )
-        )
-        masks_img_paths = sorted(
-            list(
-                itertools.chain.from_iterable(
-                    [glob(i + "*.png") for i in glob("vignettes/mask/*/*/", recursive=True)]
-                )
-            )
-        )
+        if divide_by_dept:
+            rgb_img_paths = {}
+            masks_img_paths = {}
+            depts = [i for i in list(os.walk(r'vignettes/rgb/'))[0][1] if not i.startswith('.') and not i.endswith('large')]
 
+            for i in depts:
+                rgb_img_paths[f'{i}'] = sorted(
+                    list(
+                        itertools.chain.from_iterable(
+                            [glob(i + "*.jpg") for i in glob(f"vignettes/rgb/{i}/*/", recursive=True)]
+                            )
+                        )
+                    )
+
+                masks_img_paths[f'{i}'] = sorted(
+                    list(
+                        itertools.chain.from_iterable(
+                            [glob(i + "*.png") for i in glob(f"vignettes/mask/{i}/*/", recursive=True)]
+                            )
+                        )
+                    )
+
+        else:
+            rgb_img_paths = sorted(
+                list(
+                    itertools.chain.from_iterable(
+                        [glob(i + "*.jpg") for i in glob("vignettes/rgb/*/*/", recursive=True)]
+                    )
+                )
+            )
+            masks_img_paths = sorted(
+                list(
+                    itertools.chain.from_iterable(
+                        [glob(i + "*.png") for i in glob("vignettes/mask/*/*/", recursive=True)]
+                    )
+                )
+            )
+            
     return rgb_img_paths, masks_img_paths
 
 
