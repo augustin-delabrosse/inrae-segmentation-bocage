@@ -10,7 +10,7 @@ from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2 
-from skimage.restoration import denoise_wavelet, denoise_tv_bregman, denoise_tv_chambolle
+from skimage.restoration import denoise_wavelet# , denoise_tv_bregman, denoise_tv_chambolle
 from skimage.util import random_noise
 # from PIL import Image
 
@@ -157,10 +157,6 @@ class orthosSequence(keras.utils.Sequence):
         i = idx * self.batch_size
         batch_input_img_paths = self.input_img_paths[i : i + self.batch_size]
         batch_target_img_paths = self.target_img_paths[i : i + self.batch_size]
-
-        # print(batch_input_img_paths)
-        # print(batch_target_img_paths)
-        
         
         if self.rgb:
             x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
@@ -169,30 +165,35 @@ class orthosSequence(keras.utils.Sequence):
                 x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
             else:
                 x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
-                # template = cv2.imread('donnees/BDORTHO/BDORTHO_2-0_RVB-0M50_JP2-E080_LAMB93_D035_2012-01-01/BDORTHO/1_DONNEES_LIVRAISON_2015-02-00365/BDO_RVB_0M50_JP2-E080_LAMB93_D35-2012/35-2012-0305-6780-LA93-0M50-E080.jp2')[:288, :288]
         y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
-        # print(x.shape, y.shape)
+        # y_4 = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        # y_3 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/2).astype(int)) + (1,), dtype="float32") 
+        # y_2 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/4).astype(int)) + (1,), dtype="float32")
+        # y_1 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/8).astype(int)) + (1,), dtype="float32")
+        
         for j in range(len(batch_input_img_paths)):
             img_path = batch_input_img_paths[j]
             mask_path = batch_target_img_paths[j]
-
-            # print(img_path + ' I ' + mask_path)
             
             img = load_img(img_path, target_size=self.img_size)
             img = np.array(img)
-            # img[:,:,1] = np.clip(img[:,:,1] * 2, a_min=0, a_max=255)
+            
             if not self.rgb:
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
             if self.add_noise:
                 if self.rgb:
                     if self.year==2006:
                         if j%4==1:
+                            # print(1)
                             img = cv2.GaussianBlur(img,(3, 3),cv2.BORDER_DEFAULT)
                         elif j%4==2:
+                            # print(2)
                             img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
                         elif j%4==3:
+                            # print(3)
                             img = denoise_wavelet(img, channel_axis=-1)
                         else:
+                            # print(0)
                             img = img.copy()
                         # img = denoise_tv_chambolle(img, channel_axis=-1)
                         # img = denoise_tv_bregman(img, channel_axis=-1)
@@ -219,6 +220,19 @@ class orthosSequence(keras.utils.Sequence):
             mask = np.asarray(mask)
             if mask.max() > 1:
                 mask = mask/255.
-            y[j] = np.expand_dims(mask, 2)
-            
+            mask = np.expand_dims(mask, 2)
+            y[j] = mask
         return x, y
+            
+#             mask_4 = np.expand_dims(mask, 2)
+#             mask_3 = mask_4[::2,::2,:]
+#             mask_2 = mask_3[::2,::2,:]
+#             mask_1 = mask_2[::2,::2,:]
+            
+#             y_4[j] = mask_4
+#             y_3[j] = mask_3
+#             y_2[j] = mask_2
+#             y_1[j] = mask_1
+            
+#         return x, [y_1, y_2, y_3, y_4]
+
