@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-
+from scipy.ndimage import generic_filter
 import os
 
 from tqdm import tqdm
@@ -62,6 +62,16 @@ def threshold_array(arr, threshold):
     result[result < threshold] = 0
     result[result >= threshold] = 1
     
+    return result
+
+def local_std_dev(image, size=(3, 3, 3)):
+    # Define the function to calculate standard deviation for a 3x3 neighborhood
+    def std_dev_function(arr):
+        return np.std(arr)
+
+    # Apply the standard deviation function to each pixel's 3x3 neighborhood
+    result = generic_filter(image, std_dev_function, size=size, output=np.float32, mode='nearest')
+
     return result
 
 

@@ -1,7 +1,7 @@
 # import tensorflow as tf 
 from tensorflow import keras
 from keras.models import Model
-from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, Conv2DTranspose
+from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, Conv2DTranspose, AveragePooling2D
 from keras.layers import Activation, add, multiply, Lambda
 from keras.layers import UpSampling2D, Dropout, BatchNormalization
 from keras.initializers import glorot_normal
@@ -87,7 +87,7 @@ class AttentionUnet:
         x = Activation('relu', name = name + '_act')(x)
         return x
 
-    def build_model(self):
+    def build_attention_unet(self):
         '''
         This function defines the complete Attention U-Net architecture.
         It includes encoder and decoder parts with attention mechanisms.
@@ -132,6 +132,60 @@ class AttentionUnet:
 
         # Define the model with inputs and outputs
         model = Model(inputs=[inputs], outputs=[out])
+
+        return model
+    
+    def build_improved_attention_unet(self):
+        img_input = Input(shape=self.input_size, name='input_scale1')
+        scale_img_2 = AveragePooling2D(pool_size=(2, 2), name='input_scale2')(img_input)
+        scale_img_3 = AveragePooling2D(pool_size=(2, 2), name='input_scale3')(scale_img_2)
+        scale_img_4 = AveragePooling2D(pool_size=(2, 2), name='input_scale4')(scale_img_3)
+
+        conv1 = self.UnetConv2D(img_input, 32, is_batchnorm=True, name='conv1')
+        pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
+
+        input2 = Conv2D(64, (3, 3), padding='same', activation='relu', name='conv_scale2')(scale_img_2)
+        input2 = concatenate([scale_img_2, input2, pool1], axis=3)
+        conv2 = self.UnetConv2D(input2, 64, is_batchnorm=True, name='conv2')
+        pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
+
+        input3 = Conv2D(128, (3, 3), padding='same', activation='relu', name='conv_scale3')(scale_img_3)
+        input3 = concatenate([scale_img_3, input3, pool2], axis=3)
+        conv3 = self.UnetConv2D(input3, 128, is_batchnorm=True, name='conv3')
+        pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+
+        input4 = Conv2D(256, (3, 3), padding='same', activation='relu', name='conv_scale4')(scale_img_4)
+        input4 = concatenate([scale_img_4, input4, pool3], axis=3)
+        conv4 = self.UnetConv2D(input4, 64, is_batchnorm=True, name='conv4')
+        pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
+
+        center = self.UnetConv2D(pool4, 512, is_batchnorm=True, name='center')
+
+        g1 = self.UnetGatingSignal(center, is_batchnorm=True, name='g1')
+        attn1 = self.AttnGatingBlock(conv4, g1, 128, '_1')
+        up1 = concatenate([Conv2DTranspose(32, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(center), attn1], name='up1')
+
+        g2 = self.UnetGatingSignal(up1, is_batchnorm=True, name='g2')
+        attn2 = self.AttnGatingBlock(conv3, g2, 64, '_2')
+        up2 = concatenate([Conv2DTranspose(64, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(up1), attn2], name='up2')
+
+        g3 = self.UnetGatingSignal(up1, is_batchnorm=True, name='g3')
+        attn3 = self.AttnGatingBlock(conv2, g3, 32, '_3')
+        up3 = concatenate([Conv2DTranspose(32, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(up2), attn3], name='up3')
+
+        up4 = concatenate([Conv2DTranspose(32, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(up3), conv1], name='up4')
+
+        conv6 = self.UnetConv2D(up1, 256, is_batchnorm=True, name='conv6')
+        conv7 = self.UnetConv2D(up2, 128, is_batchnorm=True, name='conv7')
+        conv8 = self.UnetConv2D(up3, 64, is_batchnorm=True, name='conv8')
+        conv9 = self.UnetConv2D(up4, 32, is_batchnorm=True, name='conv9')
+
+        out6 = Conv2D(1, (1, 1), activation='sigmoid', name='pred1')(conv6)
+        out7 = Conv2D(1, (1, 1), activation='sigmoid', name='pred2')(conv7)
+        out8 = Conv2D(1, (1, 1), activation='sigmoid', name='pred3')(conv8)
+        out9 = Conv2D(1, (1, 1), activation='sigmoid', name='final')(conv9)
+
+        model = Model(inputs=[img_input], outputs=[out6, out7, out8, out9])
 
         return model
 
