@@ -228,6 +228,8 @@ def load_custom_model(model_path, custom_objects_list):
             custom_objects_dict[str(i).split(' at ')[0].split('.')[-1]] = i
         elif 'bound method ' in str(i):
             custom_objects_dict[str(i).split(' of ')[0].split('.')[-1]] = i
+        else:
+            custom_objects_dict[str(i).split('.')[-1][:-2]] = i
     loaded_model = keras.models.load_model(
         model_path,
         custom_objects=custom_objects_dict

@@ -1,4 +1,4 @@
-# import tensorflow as tf 
+import tensorflow as tf 
 from tensorflow import keras
 from keras.models import Model
 from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, Conv2DTranspose, AveragePooling2D
@@ -13,6 +13,32 @@ warnings.simplefilter("ignore")
 
 K.set_image_data_format('channels_last')  # Set the data format to 'channels_last' (TensorFlow dimension ordering)
 
+
+# https://github.com/cpuimage/MaxDropout/tree/master
+class MaxDropout(tf.keras.layers.Layer):
+    """MaxDropout: Deep Neural Network Regularization Based on Maximum Output Values
+    (https://arxiv.org/abs/2007.13723)
+    """
+
+    def __init__(self, rate=0.3, trainable=True, name=None, **kwargs):
+        super(MaxDropout, self).__init__(name=name, trainable=trainable, **kwargs)
+        if rate < 0 or rate > 1:
+            raise ValueError("dropout probability has to be between 0 and 1, "
+                             "but got {}".format(rate))
+        self.rate = 1. - rate
+
+    def call(self, inputs, training=None):
+        if training:
+            min_in = tf.math.reduce_min(inputs)
+            max_in = tf.math.reduce_max(inputs)
+            up = inputs - min_in
+            divisor = max_in - min_in
+            inputs_out = tf.math.divide_no_nan(up, divisor)
+            return tf.where(inputs_out > self.rate, tf.zeros_like(inputs), inputs_out)
+        else:
+            return inputs
+        
+# https://github.com/nabsabraham/focal-tversky-unet/tree/master   
 class AttentionUnet:
     def __init__(self, input_size=(256, 256, 3)):
         self.input_size = input_size
@@ -86,6 +112,7 @@ class AttentionUnet:
         # ReLU Activation:
         x = Activation('relu', name = name + '_act')(x)
         return x
+
 
     def build_attention_unet(self):
         '''
@@ -189,7 +216,57 @@ class AttentionUnet:
 
         return model
 
+    def build_regularized_attention_unet(self, drop_rate=0.3):
+        '''
+        This function defines the complete Attention U-Net architecture.
+        It includes encoder and decoder parts with attention mechanisms.
+        '''
+        # Input layer
+        inputs = Input(shape=self.input_size)
 
+        # Encoder part
+        conv1 = self.UnetConv2D(inputs, 32, is_batchnorm=True, name='conv1')
+        pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
+        drop1 = MaxDropout(rate=drop_rate)(pool1)
+
+        conv2 = self.UnetConv2D(drop1, 32, is_batchnorm=True, name='conv2')
+        pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
+        drop2 = MaxDropout(rate=drop_rate)(pool2)
+        
+        conv3 = self.UnetConv2D(drop2, 64, is_batchnorm=True, name='conv3')
+        #conv3 = Dropout(0.2,name='drop_conv3')(conv3)
+        pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+        drop3 = MaxDropout(rate=drop_rate)(pool3)
+
+        conv4 = self.UnetConv2D(drop3, 64, is_batchnorm=True, name='conv4')
+        #conv4 = Dropout(0.2, name='drop_conv4')(conv4)
+        pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
+        drop4 = MaxDropout(rate=drop_rate)(pool4)
+        
+        # Central part
+        center = self.UnetConv2D(drop4, 128, is_batchnorm=True, name='center')
+
+        # Gating signals
+        g1 = self.UnetGatingSignal(center, is_batchnorm=True, name='g1')
+        attn1 = self.AttnGatingBlock(conv4, g1, 128, '_1')
+        up1 = concatenate([Conv2DTranspose(32, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(center), attn1], name='up1')
+
+        g2 = self.UnetGatingSignal(up1, is_batchnorm=True, name='g2')
+        attn2 = self.AttnGatingBlock(conv3, g2, 64, '_2')
+        up2 = concatenate([Conv2DTranspose(64, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(up1), attn2], name='up2')
+
+        g3 = self.UnetGatingSignal(up1, is_batchnorm=True, name='g3')
+        attn3 = self.AttnGatingBlock(conv2, g3, 32, '_3')
+        up3 = concatenate([Conv2DTranspose(32, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(up2), attn3], name='up3')
+
+        # Final upsampling and output
+        up4 = concatenate([Conv2DTranspose(32, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(up3), conv1], name='up4')
+        out = Conv2D(1, (1, 1), activation='sigmoid',  kernel_initializer=self.kinit, name='final')(up4)
+
+        # Define the model with inputs and outputs
+        model = Model(inputs=[inputs], outputs=[out])
+
+        return model
 
 class Losses:
     @staticmethod

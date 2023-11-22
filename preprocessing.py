@@ -165,11 +165,11 @@ class orthosSequence(keras.utils.Sequence):
                 x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
             else:
                 x = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
-        # y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
-        y_4 = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
-        y_3 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/2).astype(int)) + (1,), dtype="float32") 
-        y_2 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/4).astype(int)) + (1,), dtype="float32")
-        y_1 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/8).astype(int)) + (1,), dtype="float32")
+        y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        # y_4 = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="float32")
+        # y_3 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/2).astype(int)) + (1,), dtype="float32") 
+        # y_2 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/4).astype(int)) + (1,), dtype="float32")
+        # y_1 = np.zeros((self.batch_size,) + tuple((np.array(self.img_size)/8).astype(int)) + (1,), dtype="float32")
         
         for j in range(len(batch_input_img_paths)):
             img_path = batch_input_img_paths[j]
@@ -197,7 +197,10 @@ class orthosSequence(keras.utils.Sequence):
                         #     img = img.copy()
                         # img = denoise_tv_chambolle(img, channel_axis=-1)
                         # img = denoise_tv_bregman(img, channel_axis=-1)
-                        img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
+                        # img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
+                        # img = rgb_svd_decomposition(img, k=40)
+                        img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
+                                rescale_sigma=True)
                         
                     elif self.year==2012:
                         img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
@@ -220,19 +223,19 @@ class orthosSequence(keras.utils.Sequence):
             mask = np.asarray(mask)
             if mask.max() > 1:
                 mask = mask/255.
-        #     mask = np.expand_dims(mask, 2)
-        #     y[j] = mask
-        # return x, y
+            mask = np.expand_dims(mask, 2)
+            y[j] = mask
+        return x, y
             
-            mask_4 = np.expand_dims(mask, 2)
-            mask_3 = mask_4[::2,::2,:]
-            mask_2 = mask_3[::2,::2,:]
-            mask_1 = mask_2[::2,::2,:]
+#             mask_4 = np.expand_dims(mask, 2)
+#             mask_3 = mask_4[::2,::2,:]
+#             mask_2 = mask_3[::2,::2,:]
+#             mask_1 = mask_2[::2,::2,:]
             
-            y_4[j] = mask_4
-            y_3[j] = mask_3
-            y_2[j] = mask_2
-            y_1[j] = mask_1
+#             y_4[j] = mask_4
+#             y_3[j] = mask_3
+#             y_2[j] = mask_2
+#             y_1[j] = mask_1
             
-        return x, [y_1, y_2, y_3, y_4]
+#         return x, [y_1, y_2, y_3, y_4]
 
