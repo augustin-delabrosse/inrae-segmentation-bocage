@@ -414,7 +414,7 @@ class Losses:
 
 
 class RegularizedAttentionUnet(AttentionUnet):
-    def __init__(self, input_size=(256, 256, 3), dropout_rate=0.2, l2_reg=1e-4):
+    def __init__(self, input_size=(256, 256, 3), dropout_rate=0.3, l2_reg=1e-4):
         self.dropout_rate = dropout_rate
         self.l2_reg = l2_reg
         self.input_size = input_size

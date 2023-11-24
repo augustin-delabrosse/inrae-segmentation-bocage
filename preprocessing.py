@@ -3,6 +3,7 @@ from utils import get_random_indices, get_file_paths, gray_svd_decomposition, rg
 import tensorflow as tf 
 from tensorflow import keras
 from tensorflow.keras.preprocessing.image import load_img
+from tensorflow.image import per_image_standardization
 from sklearn.model_selection import train_test_split
 
 
@@ -183,24 +184,24 @@ class orthosSequence(keras.utils.Sequence):
             if self.add_noise:
                 if self.rgb:
                     if self.year==2006:
-                        # if j%4==1:
-                        #     # print(1)
-                        #     img = cv2.GaussianBlur(img,(3, 3),cv2.BORDER_DEFAULT)
-                        # elif j%4==2:
-                        #     # print(2)
-                        #     img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
-                        # elif j%4==3:
-                        #     # print(3)
-                        #     img = denoise_wavelet(img, channel_axis=-1)
-                        # else:
-                        #     # print(0)
-                        #     img = img.copy()
+                        if j%4==1:
+                            # print(1)
+                            img = cv2.GaussianBlur(img,(3, 3),cv2.BORDER_DEFAULT)
+                        elif j%4==2:
+                            # print(2)
+                            img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
+                        elif j%4==3:
+                            # print(3)
+                            img = denoise_wavelet(img, channel_axis=-1)
+                        else:
+                            # print(0)
+                            img = img.copy()
                         # img = denoise_tv_chambolle(img, channel_axis=-1)
                         # img = denoise_tv_bregman(img, channel_axis=-1)
                         # img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
                         # img = rgb_svd_decomposition(img, k=40)
-                        img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
-                                rescale_sigma=True)
+                        # img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
+                                # rescale_sigma=True)
                         
                     elif self.year==2012:
                         img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
@@ -217,6 +218,9 @@ class orthosSequence(keras.utils.Sequence):
                 # img = (img + self.noise * img.std() * np.random.random(img.shape)).astype(np.uint8)
             if img.max() > 1:
                 img = img/255.
+                
+            # img = per_image_standardization(img)
+            
             x[j] = img if self.rgb else (np.stack([img]*3, axis=2) if self.segformer else np.expand_dims(img, 2))
         
             mask = load_img(mask_path, target_size=self.img_size, color_mode="grayscale")
