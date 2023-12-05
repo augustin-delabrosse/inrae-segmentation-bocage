@@ -125,6 +125,7 @@ class AttentionUnet:
         result_bn = BatchNormalization(name='q_attn_bn'+name)(result)
         return result_bn
 
+    
     def UnetConv2D(self, input, outdim, is_batchnorm, name):
         x = Conv2D(outdim, (3, 3), strides=(1, 1), kernel_initializer=self.kinit, padding="same", name=name+'_1')(input)
         if is_batchnorm:
@@ -136,6 +137,7 @@ class AttentionUnet:
             x = BatchNormalization(name=name + '_2_bn')(x)
         x = Activation('relu', name=name + '_2_act')(x)
         return x
+    
 
     def UnetGatingSignal(self, input, is_batchnorm, name):
         # Get the shape of the input tensor

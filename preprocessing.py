@@ -184,21 +184,21 @@ class orthosSequence(keras.utils.Sequence):
             if self.add_noise:
                 if self.rgb:
                     if self.year==2006:
-                        if j%4==1:
-                            # print(1)
-                            img = cv2.GaussianBlur(img,(3, 3),cv2.BORDER_DEFAULT)
-                        elif j%4==2:
-                            # print(2)
-                            img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
-                        elif j%4==3:
-                            # print(3)
-                            img = denoise_wavelet(img, channel_axis=-1)
-                        else:
-                            # print(0)
-                            img = img.copy()
+                        # if j%4==1:
+                        #     # print(1)
+                        #     img = cv2.GaussianBlur(img,(3, 3),cv2.BORDER_DEFAULT)
+                        # elif j%4==2:
+                        #     # print(2)
+                        #     img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
+                        # elif j%4==3:
+                        #     # print(3)
+                        #     img = denoise_wavelet(img, channel_axis=-1)
+                        # else:
+                        #     # print(0)
+                        #     img = img.copy()
                         # img = denoise_tv_chambolle(img, channel_axis=-1)
                         # img = denoise_tv_bregman(img, channel_axis=-1)
-                        # img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
+                        img = cv2.GaussianBlur(img,(5, 5),cv2.BORDER_DEFAULT)
                         # img = rgb_svd_decomposition(img, k=40)
                         # img = denoise_wavelet(img, channel_axis=-1, convert2ycbcr=True,
                                 # rescale_sigma=True)
