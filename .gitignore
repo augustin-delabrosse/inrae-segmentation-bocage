@@ -173,3 +173,5 @@ test*.*
 predictions/
 ColorizeNet/
 vero/
+autre/
+runs/
