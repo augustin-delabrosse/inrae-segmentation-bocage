@@ -2,6 +2,7 @@
 # https://www.youtube.com/watch?v=fV6CfJb6NDw&ab_channel=IdiotDeveloper
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class  conv_block(nn.Module):
     def __init__(self, in_c, out_c):
@@ -110,6 +111,36 @@ class attention_unet(nn.Module):
         
         return output
 
+# ALPHA = 0.5
+# BETA = 0.5
+# GAMMA = 1
+
+class FocalTverskyLoss(nn.Module):
+    def __init__(self, weight=None, size_average=True, alpha=0.5, beta=0.5, gamma=1):
+        super(FocalTverskyLoss, self).__init__()
+        
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+
+    def forward(self, inputs, targets, smooth=1):
+        
+        #comment out if your model contains a sigmoid or equivalent activation layer
+        # inputs = F.sigmoid(inputs)       
+        
+        #flatten label and prediction tensors
+        inputs = inputs.view(-1)
+        targets = targets.view(-1)
+        
+        #True Positives, False Positives & False Negatives
+        TP = (inputs * targets).sum()    
+        FP = ((1-targets) * inputs).sum()
+        FN = (targets * (1-inputs)).sum()
+        
+        Tversky = (TP + smooth) / (TP + self.alpha*FP + self.beta*FN + smooth)  
+        FocalTversky = (1 - Tversky)**self.gamma
+                       
+        return FocalTversky
 
 # if __name__ == "__main__":
 #     x = torch.randn((8, 3, 256, 256))
