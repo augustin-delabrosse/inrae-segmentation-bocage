@@ -13,7 +13,7 @@ from tensorflow import keras
 
 # from keras import backend as K
 
-def get_file_paths(divide_by_dept=False, large=False):
+def get_file_paths(divide_by_dept=False, large=False, year=2020):
     """
     Get file paths for RGB images and mask images.
 
@@ -21,17 +21,31 @@ def get_file_paths(divide_by_dept=False, large=False):
     - list: List of RGB image paths.
     - list: List of mask image paths.
     """
+    
+    
+    
+    if year == 2020:
+        path_img = 'vignettes/rgb/'
+        path_mask = 'vignettes/mask/'
+    else:
+        path_mask = 'lorem/'
+        if large:
+            path_img = f'vignettes/rgb_older/rgb_{str(year)}_large/'
+        else:
+            path_img = f'vignettes/rgb_older/rgb_{str(year)}/'
+            
+    
     if large:
         if divide_by_dept:
             rgb_img_paths = {}
             masks_img_paths = {}
-            depts = [i for i in list(os.walk(r'vignettes/rgb/'))[0][1] if not i.startswith('.') and i.endswith('large')]
+            depts = [i for i in list(os.walk(f'{path_img}'))[0][1] if not i.startswith('.') and i.endswith('large')]
             
             for i in depts:
                 rgb_img_paths[f'{i}'] = sorted(
                     list(
                         itertools.chain.from_iterable(
-                            [glob(i + "*.jpg") for i in glob(f"vignettes/rgb/{i}/*/", recursive=True)]
+                            [glob(i + "*.jpg") for i in glob(f"{path_img}{i}/*/", recursive=True)]
                             )
                         )
                     )
@@ -39,7 +53,7 @@ def get_file_paths(divide_by_dept=False, large=False):
                 masks_img_paths[f'{i}'] = sorted(
                     list(
                         itertools.chain.from_iterable(
-                            [glob(i + "*.png") for i in glob(f"vignettes/mask/{i}/*/", recursive=True)]
+                            [glob(i + "*.png") for i in glob(f"{path_mask}{i}/*/", recursive=True)]
                             )
                         )
                     )
@@ -48,14 +62,14 @@ def get_file_paths(divide_by_dept=False, large=False):
             rgb_img_paths = sorted(
                 list(
                     itertools.chain.from_iterable(
-                        [glob(i + "*.jpg") for i in glob("vignettes/rgb/*_large/*/", recursive=True)]
+                        [glob(i + "*.jpg") for i in glob(f"{path_img}*_large/*/", recursive=True)]
                     )
                 )
             )
             masks_img_paths = sorted(
                 list(
                     itertools.chain.from_iterable(
-                        [glob(i + "*.png") for i in glob("vignettes/mask/*_large/*/", recursive=True)]
+                        [glob(i + "*.png") for i in glob(f"{path_mask}*_large/*/", recursive=True)]
                     )
                 )
             )
@@ -63,13 +77,13 @@ def get_file_paths(divide_by_dept=False, large=False):
         if divide_by_dept:
             rgb_img_paths = {}
             masks_img_paths = {}
-            depts = [i for i in list(os.walk(r'vignettes/rgb/'))[0][1] if not i.startswith('.') and not i.endswith('large')]
+            depts = [i for i in list(os.walk(f'{path_img}'))[0][1] if not i.startswith('.') and not i.endswith('large')]
 
             for i in depts:
                 rgb_img_paths[f'{i}'] = sorted(
                     list(
                         itertools.chain.from_iterable(
-                            [glob(i + "*.jpg") for i in glob(f"vignettes/rgb/{i}/*/", recursive=True)]
+                            [glob(i + "*.jpg") for i in glob(f"{path_img}{i}/*/", recursive=True)]
                             )
                         )
                     )
@@ -77,7 +91,7 @@ def get_file_paths(divide_by_dept=False, large=False):
                 masks_img_paths[f'{i}'] = sorted(
                     list(
                         itertools.chain.from_iterable(
-                            [glob(i + "*.png") for i in glob(f"vignettes/mask/{i}/*/", recursive=True)]
+                            [glob(i + "*.png") for i in glob(f"{path_mask}{i}/*/", recursive=True)]
                             )
                         )
                     )
@@ -86,30 +100,31 @@ def get_file_paths(divide_by_dept=False, large=False):
             rgb_img_paths = sorted(
                 list(
                     itertools.chain.from_iterable(
-                        [glob(i + "*.jpg") for i in glob("vignettes/rgb/*/*/", recursive=True)]
+                        [glob(i + "*.jpg") for i in glob(f"{path_img}*/*/", recursive=True)]
                     )
                 )
             )
             masks_img_paths = sorted(
                 list(
                     itertools.chain.from_iterable(
-                        [glob(i + "*.png") for i in glob("vignettes/mask/*/*/", recursive=True)]
+                        [glob(i + "*.png") for i in glob(f"{path_mask}*/*/", recursive=True)]
                     )
                 )
             )
-            
+    
     return rgb_img_paths, masks_img_paths
 
 
-# def threshold_array(arr, threshold):
-#     # Create a copy of the input array to avoid modifying the original
-#     result = arr.copy()
+
+def threshold_array(arr, threshold):
+    # Create a copy of the input array to avoid modifying the original
+    result = arr.copy()
     
-#     # Apply the thresholding operation
-#     result[result < threshold] = 0
-#     result[result >= threshold] = 1
+    # Apply the thresholding operation
+    result[result < threshold] = 0
+    result[result >= threshold] = 1
     
-#     return result
+    return result
 
 
 def get_class_weights(masks):
@@ -147,7 +162,7 @@ def get_random_indices(input_list, n):
     
     return random_indices
 
-def get_training_files_paths(input_img_paths, target_img_paths, max_samples, divide_by_dept=True):
+def get_training_files_paths(input_img_paths, target_img_paths, max_samples, divide_by_dept=True, year=2020):
     """
     Get training file paths for input and target images. If 'divide_by_dept'
     is True, the function returns an equal number of file paths for each 
@@ -186,23 +201,30 @@ def get_training_files_paths(input_img_paths, target_img_paths, max_samples, div
                 random_indices.sort()
 
                 img_paths = np.append(img_paths, np.array(input_img_paths[dept])[random_indices])
-                mask_paths = np.append(mask_paths, np.array(target_img_paths[dept])[random_indices])
+                if year == 2020:
+                    mask_paths = np.append(mask_paths, np.array(target_img_paths[dept])[random_indices])
         else:
             # Combine all input and target image paths
             img_paths = sorted({x for v in input_img_paths.values() for x in v})
-            mask_paths = sorted({x for v in target_img_paths.values() for x in v})
+            if year == 2020:
+                mask_paths = sorted({x for v in target_img_paths.values() for x in v})
     else:
         if max_samples:
             # Randomly select samples when not dividing by department
             random_indices = get_random_indices(range(len(input_img_paths)), max_samples)
             random_indices.sort()
             img_paths = np.array(input_img_paths)[random_indices].tolist()
-            mask_paths = np.array(target_img_paths)[random_indices].tolist()
+            if year == 2020:
+                mask_paths = np.array(target_img_paths)[random_indices].tolist()
         else:
             # Copy input and target image paths as is
             img_paths = input_img_paths.copy()
-            mask_paths = target_img_paths.copy()
+            if year == 2020:
+                mask_paths = target_img_paths.copy()
 
+    if year != 2020:
+        mask_paths = []
+        
     return img_paths, mask_paths
 
 
