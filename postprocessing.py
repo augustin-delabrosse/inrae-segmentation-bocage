@@ -28,7 +28,7 @@ def create_large_mask(list_of_paths, predictions, shapes, positions, shape_of_th
     
     mask = np.zeros(shape_of_the_large_mask)
 
-    for idx, path in tqdm(enumerate(list_of_paths)):
+    for idx, path in enumerate(list_of_paths):
         
         basepath = os.path.basename(path)
         
@@ -92,7 +92,7 @@ def new_create_large_mask(list_of_paths, predictions, shapes, positions, borders
     
     mask = np.zeros(shape_of_the_large_mask)
 
-    for idx, path in tqdm(enumerate(list_of_paths)):
+    for idx, path in enumerate(list_of_paths):
         
         basepath = os.path.basename(path)
         

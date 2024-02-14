@@ -1,3 +1,6 @@
+import os
+import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf 
 from tensorflow import keras
 from keras.regularizers import l2
@@ -194,6 +197,7 @@ class AttentionUnet:
         # Final upsampling and output
         up4 = concatenate([Conv2DTranspose(32, (3,3), strides=(2,2), padding='same', activation='relu', kernel_initializer=self.kinit)(up3), conv1], name='up4')
         out = Conv2D(1, (1, 1), activation='sigmoid',  kernel_initializer=self.kinit, name='final')(up4)
+        # out = Conv2D(2, (1, 1), activation='softmax',  kernel_initializer=self.kinit, name='final')(up4)
 
         # Define the model with inputs and outputs
         model = Model(inputs=[inputs], outputs=[out])
@@ -384,6 +388,35 @@ class Losses:
         """
         pt_1 = Losses.tversky(y_true, y_pred, smooth=smooth)
         return K.pow((1 - pt_1), gamma)
+
+    @staticmethod
+    def focal_tversky_ignore_index(y_true, y_pred, gamma=1.33, smooth=1e-6, ignore_index=255):
+        """
+        Calculate the Focal Tversky loss for binary segmentation tasks.
+
+        This function computes the Focal Tversky loss, which is a variant of the Tversky loss with a focal parameter.
+
+        Parameters:
+        - y_true (tensor): True binary labels (ground truth).
+        - y_pred (tensor): Predicted binary labels.
+        - gamma (float): Focal parameter.
+        - smooth (float): Smoothing factor to prevent division by zero.
+        - ignore_index (int): Pixel value to be ignored in the loss calculation.
+
+        Returns:
+        - tensor: Focal Tversky loss value.
+        """
+        if ignore_index is not None:
+            mask = K.cast(K.not_equal(y_true, ignore_index), K.floatx())
+            # print(mask)
+            y_true = y_true * mask
+            # print(y_true)
+            y_pred = y_pred * mask
+            # print(y_pred)
+
+        pt_1 = Losses.tversky(y_true, y_pred, smooth=smooth)
+        return K.pow((1 - pt_1), gamma)
+
 
     @staticmethod
     def Combo_loss(y_true, y_pred, ce_w=0.5, ce_d_w=0.5, smooth=1):
@@ -579,3 +612,40 @@ class RegularizedAttentionUnet(AttentionUnet):
         model = Model(inputs=[inputs], outputs=[out])
 
         return model
+
+class PerformancePlotCallback(keras.callbacks.Callback):
+    def __init__(self, val_gen, batch):
+        batch = val_gen.__getitem__(batch)
+        self.imgs = batch[0]
+        self.trues = batch[1]
+        
+    def on_epoch_end(self, epoch, logs={}):
+        # clear_output(wait=True)
+        y_preds = self.model.predict(self.imgs)
+        plt.figure(figsize=(12, 12))
+
+        title = ["Input Image", "True Mask", "Predicted Mask"]
+        display_list = [self.imgs[0], self.trues[0], np.round(y_preds[0])]
+        for i in range(len(display_list)):
+            plt.subplot(1, len(display_list), i + 1)
+            plt.title(title[i])
+            plt.imshow(keras.utils.array_to_img(display_list[i]))
+            plt.axis("off")
+        plt.show()
+        print("\nSample Prediction after epoch {}\n".format(epoch + 1))
+
+class SaveCheckpointAtEpoch(keras.callbacks.Callback):
+    def __init__(self, checkpoint_dir, fname, save_epochs):
+        super(SaveCheckpointAtEpoch, self).__init__()
+        self.checkpoint_dir = checkpoint_dir
+        self.fname = fname
+        self.save_epochs = save_epochs
+
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) in self.save_epochs:
+            model_checkpoint_path = os.path.join(self.checkpoint_dir, 
+                                                 self.fname.replace('epoch1', str(epoch+1)))
+            self.model.save(model_checkpoint_path)
+            print(f"""
+            Model checkpoint saved at epoch {epoch+1}.
+            """)

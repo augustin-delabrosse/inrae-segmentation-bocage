@@ -339,9 +339,9 @@ def vignette_to_predict_creation(path_to_orthophoto_rgb, create_stats=False):
 
     
     # Extract coordinates from RGB orthophoto path
-    rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos'][str(year) if str(year) == '2006' else 'autre']: config['rgb_coordinates_pos'][str(year) if str(year) == '2006' else 'autre']+3]
-    rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos'][str(year) if str(year) == '2006' else 'autre']+4: config['rgb_coordinates_pos'][str(year) if str(year) == '2006' else 'autre']+8]
-
+    rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos']["2006" if (str(year) == '2006' or str(year) == '2001') else 'autre']: config['rgb_coordinates_pos']["2006" if (str(year) == '2006' or str(year) == '2001') else 'autre']+3]
+    rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos']["2006" if (str(year) == '2006' or str(year) == '2001') else 'autre']+4: config['rgb_coordinates_pos']["2006" if (str(year) == '2006' or str(year) == '2001') else 'autre']+8]
+    
     # Open and resize RGB images
     ortho_rgb = np.asarray(Image.open(path_to_orthophoto_rgb))
     
@@ -453,6 +453,146 @@ def vignette_to_predict_creation(path_to_orthophoto_rgb, create_stats=False):
     
     else:
         return ortho_positions, ortho_shapes, ortho_borders
+
+
+def vignette_to_predict_creation_BW(path_to_orthophoto_rgb, create_stats=False):
+    """
+    Create vignettes from an orthophoto and optionally update statistics.
+
+    Args:
+        path_to_orthophoto_rgb (str): Path to the RGB orthophoto.
+        create_stats (bool): Whether to create statistics.
+
+    Returns:
+        tuple or None: If create_stats is True, returns ortho_positions, ortho_shapes, and df; otherwise, returns None.
+
+    This function processes an RGB orthophoto and creates vignettes from it. It can also update statistics if create_stats is True.
+
+    :param path_to_orthophoto_rgb: Path to the RGB orthophoto.
+    :param create_stats: Whether to create statistics.
+    :return: If create_stats is True, returns ortho_positions, ortho_shapes, and df; otherwise, returns ortho_positions, ortho_shapes.
+    """
+    Image.MAX_IMAGE_PIXELS = None
+
+    rgb_name = os.path.basename(path_to_orthophoto_rgb)
+    dept = rgb_name[:2]
+    year = rgb_name[3:7]
+
+    # Extract coordinates from RGB orthophoto path
+    rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos']["2006" if (int(year) <= 2006) else 'autre']: config['rgb_coordinates_pos']["2006" if (int(year) <= 2006) else 'autre']+3]
+    rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos']["2006" if (int(year) <= 2006) else 'autre']+4: config['rgb_coordinates_pos']["2006" if (int(year) <= 2006) else 'autre']+8]
+    
+    # Open and resize RGB images
+    ortho_rgb = np.asarray(Image.open(path_to_orthophoto_rgb))
+    
+    ortho_rgb_shape = ortho_rgb.shape
+    
+    w = np.min([10000, ortho_rgb_shape[0]])
+    h = np.min([10000, ortho_rgb_shape[1]])
+    
+    # print(h, w)
+    
+    if ortho_rgb_shape[0] > 10000 or ortho_rgb_shape[1] > 10000:
+        ortho_rgb = cv2.resize(ortho_rgb, (10000, 10000), interpolation=cv2.INTER_AREA)
+    
+    # Create output directories if they don't exist
+    if not os.path.exists(config['rgb_older_vignettes_path'] + f'rgb_{year}/'):
+        os.makedirs(config['rgb_older_vignettes_path'] + f'rgb_{year}/')
+    if not os.path.exists(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/'):
+        os.makedirs(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/')
+
+
+    if create_stats:
+        # Read existing DataFrame or create a new one
+        if os.path.exists(config['stat_older_BW_vignettes_path']):
+            df = pd.read_csv(config['stat_older_BW_vignettes_path'], index_col="Unnamed: 0")
+        else:
+            df = pd.DataFrame(columns=config['stat_older_BW_vignettes_col'])
+
+    if os.path.exists(config['ortho_shapes_path'] + 'ortho_shapes.json'):
+        with open(config['ortho_shapes_path'] + 'ortho_shapes.json') as f:
+            ortho_shapes = json.load(f)
+    else:
+        ortho_shapes = {}
+
+    if os.path.exists(config['ortho_positions_path'] + 'ortho_positions.json'):
+        with open(config['ortho_positions_path'] + 'ortho_positions.json') as f:
+            ortho_positions = json.load(f)
+    else:
+        ortho_positions = {}
+
+    if os.path.exists(config['ortho_borders_path'] + 'ortho_borders.json'):
+        with open(config['ortho_borders_path'] + 'ortho_borders.json') as f:
+            ortho_borders = json.load(f)
+    else:
+        ortho_borders = {}
+    
+    shapes = {}
+    positions = {}
+    borders = {}
+
+    for x in range(0, w-(config['img_size'])+1, config['img_size']):
+        for y in range(0, h-(config['img_size'])+1, config['img_size']):
+
+            crop_rgb = ortho_rgb[np.max([0, y-config['border']]): y+config['img_size']+config['border'], np.max([0, x-config['border']]): x+config['img_size']+config['border']]
+            # ortho_rgb[np.max([0, mnhc_y*h+y-config['border']]): mnhc_y*h+y+config['img_size']+config['border'], np.max([0, mnhc_x*w+x-config['border']]): mnhc_x*w+x+config['img_size']+config['border'], :]
+
+            pos = dept+'_'+str(int(int(rgb_x)*1000+x/2))+'_'+str(int(int(rgb_y)*1000+y/2)) 
+            #  dept+'_'+str(int((int(rgb_x)+mnhc_x)*1000+x/2))+'_'+str(int((int(rgb_y)-mnhc_y)*1000+y/2))
+
+            cv2.imwrite(config['rgb_older_vignettes_path'] + f'rgb_{year}/rgb_{year}_{rgb_x}_{rgb_y}/' + f'rgb_{year}_' + str(pos) + '.jpg', crop_rgb)
+
+            
+            # print({
+            #     y-config['border']: True if y-config['border'] > 0 else False,
+            #       y+config['img_size']+config['border']: True if y+config['img_size']+config['border'] < h else False,
+            #       x-config['border']:True if x-config['border'] > 0 else False,
+            #       x+config['img_size']+config['border']: True if x+config['img_size']+config['border'] < w else False
+            #     }
+            #     )
+            
+            positions[pos] = tuple(np.array([np.max([0, y-config['border']]), y+config['img_size']+config['border'], np.max([0, x-config['border']]), x+config['img_size']+config['border']])/100)
+            shapes[pos] = crop_rgb.shape
+            borders[pos] = {'top': True if y-config['border'] > 0 else False,
+                            'left': True if x-config['border'] > 0 else False,
+                            'right': True if x+config['img_size']+config['border'] < w else False,
+                            'bottom': True if y+config['img_size']+config['border'] < h else False}
+            
+            if create_stats:
+            # Calculate characteristics of the RGB crop and add to the DataFrame
+                res = [year, pos, crop_rgb.sum()] + \
+                    [np.mean(crop_rgb)] + \
+                    [np.std(crop_rgb)]+ \
+                    [np.mean(convolution(crop_rgb, N=3))] + \
+                    [np.std(convolution(crop_rgb, N=3))] 
+
+                # Append the list to the DataFrame
+                df.loc[len(df) + len(set(range(df.index[-1]))-set(df.index))
+                if len(df.index) > 0
+                else 0] = res
+
+
+
+    ortho_shapes[rgb_name] = shapes
+    with open('vignettes/rgb_older/ortho_shapes.json', 'w') as f:
+        json.dump(ortho_shapes, f)
+
+    ortho_positions[rgb_name] = positions
+    with open('vignettes/rgb_older/ortho_positions.json', 'w') as f:
+        json.dump(ortho_positions, f)
+        
+    ortho_borders[rgb_name] = borders
+    with open('vignettes/rgb_older/ortho_borders.json', 'w') as f:
+        json.dump(ortho_borders, f)
+    
+    if create_stats:
+        # Drop duplicates and save the DataFrame to a CSV file
+        df.drop_duplicates(subset='file').to_csv(config['stat_older_BW_vignettes_path'])
+
+        return ortho_positions, ortho_shapes, ortho_borders, df
+    
+    else:
+        return ortho_positions, ortho_shapes, ortho_borders
     
     
 def large_vignette_to_predict_creation(path_to_orthophoto_rgb, create_stats=False):
@@ -480,8 +620,8 @@ def large_vignette_to_predict_creation(path_to_orthophoto_rgb, create_stats=Fals
 
     
     # Extract coordinates from RGB orthophoto path
-    rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos'][str(year) if str(year) == '2006' else 'autre']: config['rgb_coordinates_pos'][str(year) if str(year) == '2006' else 'autre']+3]
-    rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos'][str(year) if str(year) == '2006' else 'autre']+4: config['rgb_coordinates_pos'][str(year) if str(year) == '2006' else 'autre']+8]
+    rgb_x = path_to_orthophoto_rgb[config['rgb_coordinates_pos']["2006" if (int(year) <= 2006) else 'autre']: config['rgb_coordinates_pos']["2006" if (int(year) <= 2006) else 'autre']+3]
+    rgb_y = path_to_orthophoto_rgb[config['rgb_coordinates_pos']["2006" if (int(year) <= 2006) else 'autre']+4: config['rgb_coordinates_pos']["2006" if (int(year) <= 2006) else 'autre']+8]
 
     # Open and resize RGB images
     ortho_rgb = np.asarray(Image.open(path_to_orthophoto_rgb))

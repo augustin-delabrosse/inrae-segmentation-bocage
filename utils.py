@@ -1,3 +1,5 @@
+import re
+from tqdm import tqdm
 import os
 import numpy as np
 from scipy.signal import convolve2d
@@ -5,6 +7,7 @@ import math
 import random
 from glob import glob
 from PIL import Image
+import matplotlib.pyplot as plt
 import itertools
 import tensorflow as tf
 from tensorflow import keras
@@ -143,7 +146,7 @@ def get_class_weights(masks):
     return {0: round(weight_of_zeros, 3), 0: round(weight_of_ones, 3)}
 
 
-def get_random_indices(input_list, n):
+def get_random_indices(input_list, n, seed=101):
     """
     Get a list of n random indices from the input list.
 
@@ -157,10 +160,21 @@ def get_random_indices(input_list, n):
     if n > len(input_list):
         raise ValueError("n cannot be greater than the length of the input list")
 
+    
     # Use random.sample to select n unique random indices
+    random.seed(seed)
     random_indices = random.sample(range(len(input_list)), n)
     
     return random_indices
+
+def shuffle_lists_of_img_and_masks(img_list, img_mask):
+    indices = np.arange(len(img_list))
+    np.random.shuffle(indices)
+    
+    img_list = list(np.array(img_list)[indices])
+    img_mask = list(np.array(img_mask)[indices])
+
+    return img_list, img_mask
 
 def get_training_files_paths(input_img_paths, target_img_paths, max_samples, divide_by_dept=True, year=2020):
     """
@@ -443,3 +457,164 @@ def hist_match(source, template):
     interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
 
     return interp_t_values[bin_idx].reshape(oldshape)
+
+
+def get_commun_coordinates_paths(rgb_dir, mask_dir, dept):
+    """
+    Get common coordinates and paths between RGB and mask images.
+
+    Args:
+        rgb_dir (str): Directory containing RGB images.
+        mask_dir (str): Directory containing mask images.
+        dept (str): Department code.
+
+    Returns:
+        tuple: Tuple of lists containing common RGB and mask image paths.
+
+    This function retrieves common coordinates and paths between RGB and mask images in specified directories for a given department.
+    """
+    # Extract the year from the RGB directory
+    m_year = int(re.findall(r'[0-9]+', mask_dir)[0])
+    m_dir = mask_dir.split('/')[0]
+
+    # Get paths of all RGB and mask images
+    input_img_paths = sorted(list(itertools.chain.from_iterable([glob(i + "*.jpg") for i in glob(rgb_dir, recursive=True)])))
+    target_img_paths = sorted(list(itertools.chain.from_iterable([glob(i + "*.png") for i in glob(mask_dir, recursive=True)])))
+
+    # Extract coordinates from each element in the list
+    get_coordinates = lambda x: tuple(map(int, os.path.splitext(os.path.basename(x))[0].split('_')[-2:]))
+
+    # Get coordinates from both lists
+    coordinates_target_img_paths = set(get_coordinates(item) for item in target_img_paths)
+    coordinates_input_img_paths = set(get_coordinates(item) for item in input_img_paths)
+
+    # Find common coordinates
+    common_coordinates = coordinates_target_img_paths.intersection(coordinates_input_img_paths)
+
+    # Filter paths based on common coordinates
+    result_img = [item for item in tqdm(input_img_paths) if get_coordinates(item) in common_coordinates]
+
+    # Generate corresponding mask paths
+    coordinates = [get_coordinates(i) for i in result_img]
+    result_mask = [f"{m_dir}/{m_year}\\{dept}\\pred_{m_year}_{dept}_{i[0]}_{i[1]}.png" for i in coordinates]
+
+
+    return result_img, result_mask
+
+
+def remove_empty_vignettes(rgb_paths_list, mask_paths_list):
+    """
+    Remove empty vignettes from lists of RGB and mask paths.
+
+    This function iterates through the RGB images, checks if each image is mostly white (empty),
+    and removes corresponding entries from both RGB and mask paths lists.
+
+    Args:
+        rgb_paths_list (list): List of paths to RGB images.
+        mask_paths_list (list): List of paths to mask images corresponding to RGB images.
+
+    Returns:
+        tuple: Updated lists of RGB and mask paths after removing empty vignettes.
+
+    Example:
+        rgb_paths, mask_paths = remove_empty_vignettes(rgb_paths, mask_paths)
+    """
+    # Initialize a counter for empty vignettes
+    num = 0
+    
+    # Create copies of the input lists to avoid modifying them directly
+    copy_rgb_paths_list = rgb_paths_list.copy()
+    copy_mask_paths_list = mask_paths_list.copy()
+    
+    # Iterate through the copied list of RGB paths with tqdm for progress tracking
+    for idx, path in tqdm(enumerate(copy_rgb_paths_list)):
+        # Read the image using Matplotlib's imread function
+        img = plt.imread(path)
+        
+        # Check if the minimum pixel value of the image is greater than 240 (mostly white)
+        if img.min() > 240:
+            # Remove the corresponding entries from both RGB and mask paths lists
+            rgb_paths_list.remove(copy_rgb_paths_list[idx])
+            mask_paths_list.remove(copy_mask_paths_list[idx])
+            # Increment the counter for empty vignettes
+            num += 1
+    
+    # Calculate the percentage of empty vignettes and print the result
+    empty_percentage = round(num / len(copy_rgb_paths_list), 4) * 100
+    print(f"{empty_percentage}% of the vignettes are empty.")
+    
+    # Return the updated lists of RGB and mask paths
+    return rgb_paths_list, mask_paths_list
+
+
+def calculate_mean_std(image):
+    """
+    Calculate the mean and standard deviation values for each channel of a numpy image array.
+
+    Parameters:
+    - image (numpy.ndarray): The input image array with shape (height, width, channels).
+
+    Returns:
+    - mean_values (numpy.ndarray): An array containing the mean values for each channel.
+    - std_values (numpy.ndarray): An array containing the standard deviation values for each channel.
+    
+    Example:
+    >>> import numpy as np
+    >>> your_image_array = np.random.rand(100, 100, 3)  # Replace with actual image array
+    >>> mean_values, std_values = calculate_mean_std(your_image_array)
+    >>> print("Mean values for each channel:", mean_values)
+    >>> print("Standard deviation values for each channel:", std_values)
+    """
+    # Calculate mean values for each channel
+    mean_values = np.mean(image, axis=(0, 1))
+
+    # Calculate standard deviation values for each channel
+    std_values = np.std(image, axis=(0, 1))
+
+    return mean_values, std_values
+
+import cv2  # You may need to install OpenCV if not already installed
+import numpy as np
+from time import time
+
+def calculate_global_mean_std(image_paths):
+    """
+    Calculate the global mean and standard deviation values for a list of images.
+
+    Parameters:
+    - image_paths (list): A list of file paths to the images.
+
+    Returns:
+    - global_mean (numpy.ndarray): An array containing the global mean values across all images and channels.
+    - global_std (numpy.ndarray): An array containing the global standard deviation values across all images and channels.
+    
+    Example:
+    >>> image_paths = ["path/to/image1.jpg", "path/to/image2.jpg"]
+    >>> global_mean, global_std = calculate_global_mean_std(image_paths)
+    >>> print("Global Mean values:", global_mean)
+    >>> print("Global Standard deviation values:", global_std)
+    """
+
+    start = time()
+    # Initialize variables to accumulate mean and std values
+    total_mean = np.zeros(3)
+    total_std = np.zeros(3)
+
+    for image_path in image_paths:
+        # Read the image using OpenCV
+        image = cv2.imread(image_path)
+        
+        # Calculate mean and std for the current image
+        mean_values, std_values = calculate_mean_std(image)
+
+        # Accumulate mean and std values
+        total_mean += mean_values
+        total_std += std_values
+
+    # Calculate global mean and std across all images
+    num_images = len(image_paths)
+    global_mean = total_mean / num_images
+    global_std = total_std / num_images
+
+    print(f'computations performed  in {round(time()-start, 2)} sec')
+    return global_mean, global_std
